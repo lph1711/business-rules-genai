@@ -67,12 +67,13 @@ def check_conditions_recursively(conditions, defined_variables):
 
             else:
                 # This is a base case condition
-                result = check_condition({key: value}, defined_variables)
+                result = check_condition(conds, defined_variables)
                 local_results.append({
                     "type": "condition",
-                    "condition": {key: value},
+                    "condition": conds,
                     "result": result
                 })
+                break
 
         # Aggregate results: if all keys are conditions, we assume all must pass
         overall_result = all(item["result"] for item in local_results)
