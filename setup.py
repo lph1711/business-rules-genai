@@ -10,7 +10,7 @@ with open('HISTORY.md') as f:
     history = f.read()
 
 setup(
-    name='business-rules',
+    name='business-rules-genai',
     version=version,
     description='Python DSL for setting up business intelligence rules that can be configured without code',
     long_description='{}\n\n{}'.format(readme, history),
