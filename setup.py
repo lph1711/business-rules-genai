@@ -1,7 +1,7 @@
 #! /usr/bin/env python
-from setuptools import setup
+from setuptools import setup, find_packages
 
-from business_rules import __version__ as version
+from business_rules_genai import __version__ as version
 
 with open('README.md') as f:
     readme = f.read()
@@ -18,7 +18,7 @@ setup(
     author='Venmo',
     author_email='open-source@venmo.com',
     url='https://github.com/venmo/business-rules',
-    packages=['business_rules'],
+    packages=find_packages(),
     license='MIT',
     classifiers=[
         "Programming Language :: Python",
