@@ -72,7 +72,6 @@ class StringType(BaseType):
 
     @type_operator(FIELD_TEXT)
     def equal_to(self, other_string):
-        print(self.value, other_string)
         return self.value == other_string
 
     @type_operator(FIELD_TEXT, label="Equal To (case insensitive)")
