@@ -71,6 +71,7 @@ def check_conditions_recursively(conditions, defined_variables):
                 local_results.append({
                     "type": "condition",
                     "condition": conds,
+                    "input": _get_variable_value(defined_variables, conds['name']).value,
                     "result": result
                 })
                 break

@@ -50,6 +50,8 @@ def type_operator(input_type, label=None,
                 args = [self._assert_valid_value_and_cast(arg) for arg in args]
                 kwargs = dict((k, self._assert_valid_value_and_cast(v))
                               for k, v in kwargs.items())
+                # if self.value is None or None in args or None in kwargs.values():
+                #     return False
             return func(self, *args, **kwargs)
         return inner
     return wrapper
@@ -65,6 +67,7 @@ class StringType(BaseType):
         if not isinstance(value, string_types):
             raise AssertionError("{0} is not a valid string type.".
                                  format(value))
+            # return None
         return value
 
     @type_operator(FIELD_TEXT)
@@ -114,6 +117,7 @@ class NumericType(BaseType):
         else:
             raise AssertionError("{0} is not a valid numeric type.".
                                  format(value))
+            # return None
 
     @type_operator(FIELD_NUMERIC)
     def equal_to(self, other_numeric):
@@ -145,6 +149,7 @@ class BooleanType(BaseType):
         if type(value) != bool:
             raise AssertionError("{0} is not a valid boolean type".
                                  format(value))
+            # return None
         return value
 
     @type_operator(FIELD_NO_INPUT)
@@ -164,6 +169,7 @@ class SelectType(BaseType):
         if not hasattr(value, '__iter__'):
             raise AssertionError("{0} is not a valid select type".
                                  format(value))
+            # return None
         return value
 
     @staticmethod
@@ -198,6 +204,7 @@ class SelectMultipleType(BaseType):
         if not hasattr(value, '__iter__'):
             raise AssertionError("{0} is not a valid select multiple type".
                                  format(value))
+            # return None
         return value
 
     @type_operator(FIELD_SELECT_MULTIPLE)

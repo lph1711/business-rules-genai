@@ -1,7 +1,7 @@
-from business_rules import engine
-from business_rules.variables import BaseVariables
-from business_rules.operators import StringType
-from business_rules.actions import BaseActions
+from business_rules_genai import engine
+from business_rules_genai.variables import BaseVariables
+from business_rules_genai.operators import StringType
+from business_rules_genai.actions import BaseActions
 
 from mock import patch, MagicMock
 from unittest import TestCase

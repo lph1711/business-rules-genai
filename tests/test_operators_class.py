@@ -1,4 +1,4 @@
-from business_rules.operators import BaseType, type_operator
+from business_rules_genai.operators import BaseType, type_operator
 from unittest import TestCase
 from mock import MagicMock
 

@@ -1,5 +1,5 @@
-from business_rules.actions import BaseActions, rule_action
-from business_rules.fields import FIELD_TEXT
+from business_rules_genai.actions import BaseActions, rule_action
+from business_rules_genai.fields import FIELD_TEXT
 from unittest import TestCase
 
 class ActionsClassTests(TestCase):
