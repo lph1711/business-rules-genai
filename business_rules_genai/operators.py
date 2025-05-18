@@ -50,8 +50,8 @@ def type_operator(input_type, label=None,
                 args = [self._assert_valid_value_and_cast(arg) for arg in args]
                 kwargs = dict((k, self._assert_valid_value_and_cast(v))
                               for k, v in kwargs.items())
-                # if self.value is None or None in args or None in kwargs.values():
-                #     return False
+                if self.value is None or None in args or None in kwargs.values():
+                    return False
             return func(self, *args, **kwargs)
         return inner
     return wrapper
@@ -65,13 +65,14 @@ class StringType(BaseType):
     def _assert_valid_value_and_cast(self, value):
         value = value or ""
         if not isinstance(value, string_types):
-            raise AssertionError("{0} is not a valid string type.".
-                                 format(value))
-            # return None
+            # raise AssertionError("{0} is not a valid string type.".
+            #                      format(value))
+            return None
         return value
 
     @type_operator(FIELD_TEXT)
     def equal_to(self, other_string):
+        print(self.value, other_string)
         return self.value == other_string
 
     @type_operator(FIELD_TEXT, label="Equal To (case insensitive)")
@@ -115,9 +116,9 @@ class NumericType(BaseType):
         if isinstance(value, Decimal):
             return value
         else:
-            raise AssertionError("{0} is not a valid numeric type.".
-                                 format(value))
-            # return None
+            # raise AssertionError("{0} is not a valid numeric type.".
+            #                      format(value))
+            return None
 
     @type_operator(FIELD_NUMERIC)
     def equal_to(self, other_numeric):
@@ -147,9 +148,9 @@ class BooleanType(BaseType):
 
     def _assert_valid_value_and_cast(self, value):
         if type(value) != bool:
-            raise AssertionError("{0} is not a valid boolean type".
-                                 format(value))
-            # return None
+            # raise AssertionError("{0} is not a valid boolean type".
+            #                      format(value))
+            return None
         return value
 
     @type_operator(FIELD_NO_INPUT)
@@ -167,9 +168,9 @@ class SelectType(BaseType):
 
     def _assert_valid_value_and_cast(self, value):
         if not hasattr(value, '__iter__'):
-            raise AssertionError("{0} is not a valid select type".
-                                 format(value))
-            # return None
+            # raise AssertionError("{0} is not a valid select type".
+            #                      format(value))
+            return None
         return value
 
     @staticmethod
@@ -202,9 +203,9 @@ class SelectMultipleType(BaseType):
 
     def _assert_valid_value_and_cast(self, value):
         if not hasattr(value, '__iter__'):
-            raise AssertionError("{0} is not a valid select multiple type".
-                                 format(value))
-            # return None
+            # raise AssertionError("{0} is not a valid select multiple type".
+            #                      format(value))
+            return None
         return value
 
     @type_operator(FIELD_SELECT_MULTIPLE)

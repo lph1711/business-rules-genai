@@ -8,9 +8,9 @@ def run_all(rule_list,
     rule_was_triggered = False
     for rule in rule_list:
         passed, detailed_results = run(rule, defined_variables, defined_actions)
+        results += detailed_results
         if passed:
             rule_was_triggered = True
-            results += detailed_results
             if stop_on_first_trigger:
                 return True, results
     return rule_was_triggered, results 
@@ -47,7 +47,6 @@ def check_conditions_recursively(conditions, defined_variables):
                     "children": group_results,
                     "result": all_passed
                 })
-
             elif key == 'any':
                 assert isinstance(value, list) and len(value) >= 1
                 group_results = []

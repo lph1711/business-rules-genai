@@ -1,4 +1,4 @@
-from business_rules.operators import (StringType,
+from business_rules_genai.operators import (StringType,
                                       NumericType, BooleanType, SelectType,
                                       SelectMultipleType)
 

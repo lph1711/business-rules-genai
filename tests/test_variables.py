@@ -1,13 +1,13 @@
 from unittest import TestCase
-from business_rules.utils import fn_name_to_pretty_label
-from business_rules.variables import (rule_variable,
+from business_rules_genai.utils import fn_name_to_pretty_label
+from business_rules_genai.variables import (rule_variable,
                                       numeric_rule_variable,
                                       string_rule_variable,
                                       boolean_rule_variable,
                                       select_rule_variable,
                                       select_multiple_rule_variable)
 
-from business_rules.operators import (NumericType,
+from business_rules_genai.operators import (NumericType,
                         StringType,
                         BooleanType,
                         SelectType,

@@ -1,5 +1,5 @@
-from business_rules.variables import BaseVariables, rule_variable
-from business_rules.operators import StringType
+from business_rules_genai.variables import BaseVariables, rule_variable
+from business_rules_genai.operators import StringType
 from unittest import TestCase
 
 class VariablesClassTests(TestCase):

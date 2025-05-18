@@ -1,8 +1,8 @@
-from business_rules.engine import check_condition
-from business_rules import export_rule_data
-from business_rules.actions import rule_action, BaseActions
-from business_rules.variables import BaseVariables, string_rule_variable, numeric_rule_variable, boolean_rule_variable
-from business_rules.fields import FIELD_TEXT, FIELD_NUMERIC, FIELD_SELECT
+from business_rules_genai.engine import check_condition
+from business_rules_genai import export_rule_data
+from business_rules_genai.actions import rule_action, BaseActions
+from business_rules_genai.variables import BaseVariables, string_rule_variable, numeric_rule_variable, boolean_rule_variable
+from business_rules_genai.fields import FIELD_TEXT, FIELD_NUMERIC, FIELD_SELECT
 
 from unittest import TestCase
 
