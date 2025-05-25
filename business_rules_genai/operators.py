@@ -242,3 +242,36 @@ class SelectMultipleType(BaseType):
     @type_operator(FIELD_SELECT_MULTIPLE)
     def shares_no_elements_with(self, other_value):
         return not self.shares_at_least_one_element_with(other_value)
+    
+# @export_type
+# class FunctionType(BaseType):
+
+#     name = "function"
+
+#     def _assert_valid_value_and_cast(self, value):
+#         if not callable(value):
+#             # raise AssertionError("{0} is not a valid function type".
+#             #                      format(value))
+#             return None
+#         return value
+
+#     @type_operator()
+#     def execute(self, *args, **kwargs):
+#         """Executes the stored function with the provided arguments."""
+#         if not callable(self.value):
+#             return False
+#         return self.value(*args, **kwargs)
+
+#     @type_operator()
+#     def accepts_parameters(self, param_types):
+#         """Checks if the function accepts the given parameter types."""
+#         if not callable(self.value):
+#             return False
+#         func_signature = inspect.signature(self.value)
+#         parameters = func_signature.parameters
+#         if len(parameters) != len(param_types):
+#             return False
+#         for param, expected_type in zip(parameters.values(), param_types):
+#             if param.annotation != inspect.Parameter.empty and param.annotation != expected_type:
+#                 return False
+#         return True
