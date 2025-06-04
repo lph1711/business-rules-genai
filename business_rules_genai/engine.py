@@ -1,14 +1,18 @@
 from .fields import FIELD_NO_INPUT
+from business_rules_genai.operators import NumericType, BaseType
 import ast
 
 def run_all(rule_list,
             defined_variables,
             defined_actions,
-            stop_on_first_trigger=False):
+            stop_on_first_trigger=False,
+            return_action_results=False):
     results = []
     rule_was_triggered = False
     for rule in rule_list:
-        passed, detailed_results = run(rule, defined_variables, defined_actions)
+        passed, detailed_results = run(rule, defined_variables, defined_actions, return_action_results)
+        if return_action_results:
+            return passed
         results += detailed_results
         if passed:
             rule_was_triggered = True
@@ -16,14 +20,15 @@ def run_all(rule_list,
                 return True, results
     return rule_was_triggered, results 
 
-def run(rule, defined_variables, defined_actions):
+def run(rule, defined_variables, defined_actions, return_action_results=False):
     conditions, actions = rule['conditions'], rule['actions']
     rule_triggered, results = check_conditions_recursively(conditions, defined_variables, defined_actions)
     if rule_triggered:
-        do_actions(actions, defined_variables, defined_actions)
+        action_result = do_actions(actions, defined_variables, defined_actions)
+        if return_action_results:
+            return action_result, []
         return True, results
     return False, results
-
 
 def check_conditions_recursively(conditions, defined_variables, defined_actions):
     results = []
@@ -68,22 +73,13 @@ def check_conditions_recursively(conditions, defined_variables, defined_actions)
             else:
                 # This is a base case condition
                 result = check_condition(conds, defined_variables, defined_actions)
-                if conds.get('params') or conds.get('expression'):
-                    local_results.append({
-                        "type": "condition_function",
-                        "condition": conds,
-                        "input": result['function_result'],
-                        "result": result['condition_result']
-                        })
-                    break
-                else:
-                    local_results.append({
-                        "type": "condition",
-                        "condition": conds,
-                        "input": _get_variable_value(defined_variables, conds['name']).value,
-                        "result": result['condition_result']
-                    })
-                    break
+                local_results.append({
+                    "type": "condition",
+                    "condition": conds,
+                    "input": result.get('function_result') if conds.get('function') or conds.get('expression') else _get_variable_value(defined_variables, conds['name']).value,
+                    "result": result.get('condition_result')
+                })
+                break
 
         # Aggregate results: if all keys are conditions, we assume all must pass
         overall_result = all(item["result"] for item in local_results)
@@ -98,25 +94,31 @@ def check_condition(condition, defined_variables, defined_actions):
     variables, values, and the comparison operator. The defined_variables
     object must have a variable defined for any variables in this condition.
     """
+    operator = condition.get('operator')
+    value = condition.get('value')
+    variable = None
+    
+    if isinstance(value, list):
+        # If the value is a list, we need to run all the actions in the list
+        value = run_all(value, defined_variables, defined_actions, stop_on_first_trigger=True, return_action_results=True)
+    
     if condition.get('expression'):
         # Parse the expression and execute it
-        expression, op, value = condition['expression'], condition['operator'], condition['value']
-        structured_expression = parse_math_expression(expression)
-        result = execute_math_expression(structured_expression, defined_variables, defined_actions)
-        return {"condition_result": _do_operator_comparison(result, op, value),
-                "function_result": result if result is not None else None}
-    elif condition.get('params'):
-        func_name, func_params, op, value = condition['function'], condition['params'], condition['operator'], condition['value']
-        func_result = do_actions([{
-            'function': func_name,
-            'params': func_params
+        structured_expression = parse_math_expression(condition['expression'])
+        variable = execute_math_expression(structured_expression, defined_variables, defined_actions)
+    
+    elif condition.get('function'):
+        variable = do_actions([{
+            'function': condition['function'],
+            'variable_params': condition.get('variable_params', {})
         }], defined_variables, defined_actions)
-        return {"condition_result" : _do_operator_comparison(func_result, op, value),
-                "function_result" : func_result.value if func_result is not None else None}
     else:
-        name, op, value = condition['name'], condition['operator'], condition['value']
-    operator_type = _get_variable_value(defined_variables, name)
-    return {"condition_result": _do_operator_comparison(operator_type, op, value)}
+        variable = _get_variable_value(defined_variables, condition.get('name'))
+
+    variable_value = variable.value if isinstance(variable, BaseType) else variable
+
+    return {"condition_result": _do_operator_comparison(variable, operator, value),
+            "function_result": variable_value}
 
 def _get_variable_value(defined_variables, name):
     """ Call the function provided on the defined_variables object with the
@@ -144,7 +146,7 @@ def _do_operator_comparison(operator_type, operator_name, comparison_value):
     comparison_value is whatever python type to compare to
     returns a bool
     """
-    print(operator_type.value, type(operator_type))
+    # print(operator_type.value, type(operator_type))
     def fallback(*args, **kwargs):
         raise AssertionError("Operator {0} does not exist for type {1}".format(
             operator_name, operator_type.__class__.__name__))
@@ -156,22 +158,23 @@ def _do_operator_comparison(operator_type, operator_name, comparison_value):
 
 def do_actions(actions, defined_variables, defined_actions):
     for action in actions:
-        method_name = action['function']
+        method_name = action.get('function') or action.get('name')
         def fallback(*args, **kwargs):
             raise AssertionError("Action {0} is not defined in class {1}"\
                     .format(method_name, defined_actions.__class__.__name__))
         params = {}
-        if action.get('params'):
-            value1 = action['params'].get('value1')
+        if action.get('variable_params'):
+            value1 = action['variable_params'].get('value1')
             if isinstance(value1, str):
                 value1 = _get_variable_value(defined_variables, value1)
 
-            value2 = action['params'].get('value2')
+            value2 = action['variable_params'].get('value2')
             if isinstance(value2, str):
                 value2 = _get_variable_value(defined_variables, value2)
 
             params = {'value1': value1, 'value2': value2}
-
+        else:
+            params = action.get('params')
         method = getattr(defined_actions, method_name, fallback)
         return method(**params)
 
@@ -236,8 +239,8 @@ def execute_math_expression(ast_dict, defined_variables, defined_actions):
             'function': function_name,
             'params': {'value1': args[0], 'value2': args[1]}
         }], defined_variables, defined_actions)
-
         return res
+    
     elif isinstance(ast_dict, str):
         return _get_variable_value(defined_variables, ast_dict)
     # elif isinstance(ast_dict, (int, float)):
