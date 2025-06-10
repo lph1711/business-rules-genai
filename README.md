@@ -1,209 +1,227 @@
-business-rules
+business-rules-genai
 ==============
 
-As a software system grows in complexity and usage, it can become burdensome if
-every change to the logic/behavior of the system also requires you to write and
-deploy new code. The goal of this business rules engine is to provide a simple
-interface allowing anyone to capture new rules and logic defining the behavior
-of a system, and a way to then process those rules on the backend.
+# Usage
 
-You might, for example, find this is a useful way for analysts to define
-marketing logic around when certain customers or items are eligible for a
-discount or to automate emails after users enter a certain state or go through
-a particular sequence of events.
-
-## Usage
-
-### 1. Define Your set of variables
-
-Variables represent values in your system, usually the value of some particular object.  You create rules by setting threshold conditions such that when a variable is computed that triggers the condition some action is taken.
+## 1. Define Your set of variables
 
 You define all the available variables for a certain kind of object in your code, and then later dynamically set the conditions and thresholds for those.
 
+Each variable must be defined with correct data types, since each data type will have its own set of operators. Current supported data types (and theirs operators) are:
+
+**numeric** - an integer, float, or python Decimal.
+
+`@numeric_rule_variable` operators:
+
+* `equal_to`
+* `greater_than`
+* `less_than`
+* `greater_than_or_equal_to`
+* `less_than_or_equal_to`
+
+**string** - a python bytestring or unicode string.
+
+`@string_rule_variable` operators:
+
+* `equal_to`
+* `starts_with`
+* `ends_with`
+* `contains`
+* `matches_regex`
+* `non_empty`
+
 For example:
 
 ```python
-class ProductVariables(BaseVariables):
+class CompanyVariables(BaseVariables):
 
-    def __init__(self, product):
-        self.product = product
+    def __init__(self, company):
+        self.company = company
 
+    @string_rule_variable
+    def customer_segment(self):
+        return self.company.customerSegment
+    
     @numeric_rule_variable
-    def current_inventory(self):
-        return self.product.current_inventory
-
-    @numeric_rule_variable(label='Days until expiration')
-    def expiration_days(self)
-        last_order = self.product.orders[-1]
-        return (last_order.expiration_date - datetime.date.today()).days
-
-    @string_rule_variable()
-    def current_month(self):
-        return datetime.datetime.now().strftime("%B")
-
-    @select_rule_variable(options=Products.top_holiday_items())
-    def goes_well_with(self):
-        return products.related_products
+    def doanhthu(self):
+        return self.company.customerRevenue
+    
+    @numeric_rule_variable
+    def vonchusohuu(self):
+        return self.company.vonchusohuu
 ```
 
-### 2. Define your set of actions
+## 2. Define your set of functions
 
-These are the actions that are available to be taken when a condition is triggered.
+These are the functions that are available to be used when a function is called or a condition is triggered.
+
+A defined function must return a NumericType or StringType
 
 For example:
 
 ```python
-class ProductActions(BaseActions):
+class CompanyActions(BaseActions):
 
-    def __init__(self, product):
-        self.product = product
+    def __init__(self, company):
+        self.company = company
 
-    @rule_action(params={"sale_percentage": FIELD_NUMERIC})
-    def put_on_sale(self, sale_percentage):
-        self.product.price = (1.0 - sale_percentage) * self.product.price
-        self.product.save()
+    def percentage(self, value1, value2):
+        if isinstance(value1, NumericType):
+            value1 = value1.value
+        if isinstance(value2, NumericType):
+            value2 = value2.value
 
-    @rule_action(params={"number_to_order": FIELD_NUMERIC})
-    def order_more(self, number_to_order):
-        ProductOrder.objects.create(product_id=self.product.id,
-                                    quantity=number_to_order)
+        if value2 == 0:
+            return NumericType(0)
+        return NumericType(round((value1 / value2) * 100))
+
+    def add(self, value1, value2):
+        if isinstance(value1, NumericType):
+            value1 = value1.value
+        if isinstance(value2, NumericType):
+            value2 = value2.value
+        return NumericType(value1 - value2)
 ```
 
-If you need a select field for an action parameter, another -more verbose- syntax is available:
+## 3. Build the rules
+
+A rule is just a JSON object that gets interpreted by the business-rules-genai engine.
+
+### Variable
+A variable of a condition can set in three different methods:
+
+1. Defined variables
 
 ```python
-class ProductActions(BaseActions):
-
-    def __init__(self, product):
-        self.product = product
-
-    @rule_action(params=[{'fieldType': FIELD_SELECT,
-                          'name': 'stock_state',
-                          'label': 'Stock state',
-                          'options': [
-                            {'label': 'Available', 'name': 'available'},
-                            {'label': 'Last items', 'name': 'last_items'},
-                            {'label': 'Out of stock', 'name': 'out_of_stock'}
-                        ]}])
-    def change_stock_state(self, stock_state):
-        self.product.stock_state = stock_state
-        self.product.save()
-```
-
-### 3. Build the rules
-
-A rule is just a JSON object that gets interpreted by the business-rules engine.
-
-Note that the JSON is expected to be auto-generated by a UI, which makes it simple for anyone to set and tweak business rules without knowing anything about the code.  The javascript library used for generating these on the web can be found [here](https://github.com/venmo/business-rules-ui).
-
-An example of the resulting python lists/dicts is:
-
-```python
-rules = [
-# expiration_days < 5 AND current_inventory > 20
-{ "conditions": { "all": [
-      { "name": "expiration_days",
-        "operator": "less_than",
-        "value": 5,
-      },
-      { "name": "current_inventory",
-        "operator": "greater_than",
-        "value": 20,
-      },
-  ]},
-  "actions": [
-      { "name": "put_on_sale",
-        "params": {"sale_percentage": 0.25},
-      },
-  ],
-},
-
-# current_inventory < 5 OR (current_month = "December" AND current_inventory < 20)
-{ "conditions": { "any": [
-      { "name": "current_inventory",
-        "operator": "less_than",
-        "value": 5,
-      },
-    ]},
-      { "all": [
-        {  "name": "current_month",
-          "operator": "equal_to",
-          "value": "December",
-        },
-        { "name": "current_inventory",
-          "operator": "less_than",
-          "value": 20,
-        }
-      ]},
-  },
-  "actions": [
-    { "name": "order_more",
-      "params":{"number_to_order": 40},
-    },
-  ],
-}]
-```
-
-### Export the available variables, operators and actions
-
-To e.g. send to your client so it knows how to build rules
-
-```python
-from business_rules import export_rule_data
-export_rule_data(ProductVariables, ProductActions)
-```
-
-that returns
-
-```python
-{"variables": [
-    { "name": "expiration_days",
-      "label": "Days until expiration",
-      "field_type": "numeric",
-      "options": []},
-    { "name": "current_month",
-      "label": "Current Month",
-      "field_type": "string",
-      "options": []},
-    { "name": "goes_well_with",
-      "label": "Goes Well With",
-      "field_type": "select",
-      "options": ["Eggnog", "Cookies", "Beef Jerkey"]}
-                ],
-  "actions": [
-    { "name": "put_on_sale",
-      "label": "Put On Sale",
-      "params": {"sale_percentage": "numeric"}},
-    { "name": "order_more",
-      "label": "Order More",
-      "params": {"number_to_order": "numeric"}}
-  ],
-  "variable_type_operators": {
-    "numeric": [ {"name": "equal_to",
-                  "label": "Equal To",
-                  "input_type": "numeric"},
-                 {"name": "less_than",
-                  "label": "Less Than",
-                  "input_type": "numeric"},
-                 {"name": "greater_than",
-                  "label": "Greater Than",
-                  "input_type": "numeric"}],
-    "string": [ { "name": "equal_to",
-                  "label": "Equal To",
-                  "input_type": "text"},
-                { "name": "non_empty",
-                  "label": "Non Empty",
-                  "input_type": "none"}]
-  }
+{ 
+  "name": "vonchusohuu",
+  "operator": "greater_than_or_equal_to",
+  "value": 5000000000,
 }
 ```
 
-### Run your rules
+- "name": the name of the defined variable in CompanyVariables class
+- "operator": the comparing operator
+- "value": value to compared to
+
+2. Function calling
+```python
+{ 
+  "function": "percentage",
+  "variable_params": ["doanhthu", 5000000],
+  "operator": "less_than_or_equal_to",
+  "value": 30
+}
+```
+
+- "function": the name of the defined function in CompanyActions class
+- "variable_params": a list of parameter for the function. A parameter can be a defined variable from CompanyVariables class or a specific value
+- "operator": the comparing operator
+- "value": value to compared to
+
+3. Math expression
+```python
+{ 
+  "expression": "(vonchusohuu / doanhthu) * 100",
+  "operator": "less_than_or_equal_to",
+  "value": 45,
+}
+```
+
+- "expression": the mathematical expression (4 basic operators are supported: +, -, x, /)
+- "operator": the comparing operator
+- "value": value to compared to
+
+### Condition value
+
+A value in a condition can also be set using a list of sub-conditions. Conditions inside the list will be evaluated top-down, and will stop after the first trigger. Then the value will be set using the action "set_value_numeric" or "set_value"string" according to the data type. For example:
+```python
+{ 
+  "name": "vonchusohuu",
+  "operator": "less_than_or_equal_to",
+  "value": [
+      { "conditions": { "all": [
+          { "name": "customer_segment",
+            "operator": "equal_to",
+            "value": "SME",
+          }
+      ]},
+        "actions": [
+            { "name": "set_value_numeric",
+              "params": [50]
+            }]},
+
+      { "conditions": { "all": [
+          { "name": "customer_segment",
+            "operator": "equal_to",
+            "value": "MMLC",
+          }
+      ]},
+        "actions": [
+            { "name": "set_value_numeric",
+              "params": [30]
+            }]}            
+  ]
+}
+```
+### ALL, ANY
+
+An example of the resulting JSON is:
+
+```python
+rules = [
+{ 
+  "conditions": {
+     "all": [
+      { "name": "vonchusohuu",
+        "operator": "greater_than_or_equal_to",
+        "value": 5000000000,
+      },
+      { "function": "percentage",
+        "variable_params": ["doanhthu", 200],
+        "operator": "less_than_or_equal_to",
+        "value": [
+            { "conditions": { "all": [
+                { "name": "customer_segment",
+                  "operator": "equal_to",
+                  "value": "SME",
+                }
+            ]},
+              "actions": [
+                  { "name": "set_value_numeric",
+                    "params": [30]
+                  }]},
+
+            { "conditions": { "all": [
+                { "name": "customer_segment",
+                  "operator": "equal_to",
+                  "value": "MMLC",
+                }
+            ]},
+              "actions": [
+                  { "name": "set_value_numeric",
+                    "params": [0]
+                  }]}            
+        ]
+      },
+      { "expression": "(vonchusohuu / doanhthu) * 100",
+        "operator": "less_than_or_equal_to",
+        "value": "doanhthu",
+      }
+      ]
+    },
+  
+  "actions": [],
+}
+]
+```
+
+## Run your rules
 
 ```python
 from business_rules import run_all
 
-rules = _some_function_to_receive_from_client()
+rules = _some_function_to_extract_rule_set()
 
 for product in Products.objects.all():
     run_all(rule_list=rules,
@@ -253,42 +271,3 @@ Note: to compare floating point equality we just check that the difference is le
 
 * `is_true`
 * `is_false`
-
-**select** - a set of values, where the threshold will be a single item.
-
-`@select_rule_variable` operators:
-
-* `contains`
-* `does_not_contain`
-
-**select_multiple** - a set of values, where the threshold will be a set of items.
-
-`@select_multiple_rule_variable` operators:
-
-* `contains_all`
-* `is_contained_by`
-* `shares_at_least_one_element_with`
-* `shares_exactly_one_element_with`
-* `shares_no_elements_with`
-
-### Returning data to your client
-
-
-
-## Contributing
-
-Open up a pull request, making sure to add tests for any new functionality. To set up the dev environment (assuming you're using [virtualenvwrapper](http://docs.python-guide.org/en/latest/dev/virtualenvs/#virtualenvwrapper)):
-
-```bash
-$ python -m virtualenv venv
-$ source ./venv/bin/activate
-$ pip install -r dev-requirements.txt -e .
-$ pytest
-```
-
-Alternatively, you can also use Tox:
-
-```bash
-$ pip install "tox<4"
-$ tox -p auto --skip-missing-interpreters
-```

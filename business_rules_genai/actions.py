@@ -46,7 +46,7 @@ def rule_action(label=None, params=None):
                            name=name,
                            fieldType=field_type) \
                       for name, field_type in params.items()]
-        _validate_action_parameters(func, params_)
+        # _validate_action_parameters(func, params_)
         func.is_rule_action = True
         func.label = label \
                 or fn_name_to_pretty_label(func.__name__)
