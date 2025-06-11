@@ -119,10 +119,10 @@ def check_condition(condition, defined_variables, defined_actions):
     elif condition.get('function'):
         variable = do_actions([{
             'function': condition['function'],
-            'variable_params': condition.get('variable_params', {})
+            'params': condition.get('params', {})
         }], defined_variables, defined_actions)
 
-        label = condition.get('label') or f"{condition['function']}({', '.join(f'{param}' for param in condition.get('variable_params', []))})"
+        label = condition.get('label') or f"{condition['function']}({', '.join(f'{param}' for param in condition.get('params', []))})"
     else:
         variable = _get_variable_value(defined_variables, condition.get('name'))
         label = condition.get('label') or condition.get('name')
@@ -178,8 +178,13 @@ def do_actions(actions, defined_variables, defined_actions):
         def fallback(*args, **kwargs):
             raise AssertionError("Action {0} is not defined in class {1}"\
                     .format(method_name, defined_actions.__class__.__name__))
-        params = action.get('variable_params') or action.get('params') or []
         
+        params = action.get('params')
+        if params is None or params == {}:
+            params = []
+        elif not isinstance(params, list):
+            params = [params]
+
         # Process all parameters for variable substitution
         processed_params = [
             _get_variable_value(defined_variables, param) or param 

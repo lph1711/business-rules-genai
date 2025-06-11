@@ -119,7 +119,7 @@ A variable of a condition can set in three different methods:
 ```python
 { 
   "function": "percentage",
-  "variable_params": ["doanhthu", 5000000],
+  "params": ["doanhthu", 5000000],
   "operator": "less_than_or_equal_to",
   "value": 30
 }
@@ -170,8 +170,18 @@ A value in a condition can also be set using a list of sub-conditions. Condition
       ]},
         "actions": [
             { "name": "set_value_numeric",
-              "params": [30]
-            }]}            
+              "params": 30
+            }]},
+
+      { "conditions": { "all": [
+          { "function": "always_true",
+            "operator": "is_true"
+          }
+      ]},
+        "actions": [
+            { "name": "set_value_numeric",
+              "params": 30
+            }]}                 
   ]
 }
 ```
@@ -189,9 +199,10 @@ rules = [
         "value": 5000000000,
       },
       { "function": "percentage",
-        "variable_params": ["doanhthu", 200],
+        "params": ["doanhthu", 200],
         "operator": "less_than_or_equal_to",
         "value": [
+          #First condition
             { "conditions": { "all": [
                 { "name": "customer_segment",
                   "operator": "equal_to",
@@ -200,19 +211,35 @@ rules = [
             ]},
               "actions": [
                   { "name": "set_value_numeric",
-                    "params": [30]
+                    "params": 0
                   }]},
 
-            { "conditions": { "all": [
+          #Second condition
+            { "conditions": { "any": [
                 { "name": "customer_segment",
                   "operator": "equal_to",
                   "value": "MMLC",
+                },
+                { "name": "customer_segment",
+                  "operator": "equal_to",
+                  "value": "UE",
                 }
             ]},
               "actions": [
                   { "name": "set_value_numeric",
-                    "params": [0]
-                  }]}            
+                    "params": 30
+                  }]},
+
+          #Else condition
+            { "conditions": { "all": [
+                { "function": "always_true",
+                  "operator": "is_true"
+                }
+            ]},
+              "actions": [
+                  { "name": "set_value_numeric",
+                    "params": 50
+                  }]}           
         ]
       },
       { "expression": "(vonchusohuu / doanhthu) * 100",
