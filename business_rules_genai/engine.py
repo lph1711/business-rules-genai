@@ -24,7 +24,7 @@ def run_all(rule_list,
     return rule_was_triggered, results 
 
 def run(rule, defined_variables, defined_actions, return_action_results=False):
-    conditions, actions = rule['conditions'], rule['actions']
+    conditions, actions = rule.get('conditions', {}), rule.get('actions', {})
     rule_triggered, results = check_conditions_recursively(conditions, defined_variables, defined_actions)
     if rule_triggered:
         action_result = do_actions(actions, defined_variables, defined_actions)

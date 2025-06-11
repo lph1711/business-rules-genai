@@ -30,6 +30,13 @@ Each variable must be defined with correct data types, since each data type will
 * `matches_regex`
 * `non_empty`
 
+**boolean** - a True or False value.
+
+`@boolean_rule_variable` operators:
+
+* `is_true`
+* `is_false`
+
 For example:
 
 ```python
@@ -49,6 +56,10 @@ class CompanyVariables(BaseVariables):
     @numeric_rule_variable
     def vonchusohuu(self):
         return self.company.vonchusohuu
+      
+    @boolean_rule_variable
+    def engagedInImportsExports(self):
+        return self.company['engagedInImportsExports'] == "x"
 ```
 
 ## 2. Define your set of functions
