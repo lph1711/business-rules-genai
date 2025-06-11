@@ -66,7 +66,7 @@ class CompanyVariables(BaseVariables):
 
 These are the functions that are available to be used when a function is called or a condition is triggered.
 
-A defined function must return a NumericType or StringType
+A defined function must return a NumericType or StringType or BooleanType
 
 For example:
 
@@ -159,7 +159,7 @@ A value in a condition can also be set using a list of sub-conditions. Condition
       ]},
         "actions": [
             { "name": "set_value_numeric",
-              "params": [50]
+              "params": 0
             }]},
 
       { "conditions": { "all": [
@@ -180,7 +180,7 @@ A value in a condition can also be set using a list of sub-conditions. Condition
       ]},
         "actions": [
             { "name": "set_value_numeric",
-              "params": 30
+              "params": 50
             }]}                 
   ]
 }
@@ -244,7 +244,7 @@ rules = [
       },
       { "expression": "(vonchusohuu / doanhthu) * 100",
         "operator": "less_than_or_equal_to",
-        "value": "doanhthu",
+        "value": 50,
       }
       ]
     },
