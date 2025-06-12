@@ -14,8 +14,8 @@ def run_all(rule_list,
     rule_was_triggered = False
     for rule in rule_list:
         passed, detailed_results = run(rule, defined_variables, defined_actions, return_action_results)
-        if return_action_results:
-            return passed
+        if return_action_results and passed:
+            return detailed_results
         results += detailed_results
         if passed:
             rule_was_triggered = True
@@ -29,7 +29,7 @@ def run(rule, defined_variables, defined_actions, return_action_results=False):
     if rule_triggered:
         action_result = do_actions(actions, defined_variables, defined_actions)
         if return_action_results:
-            return action_result, []
+            return True, action_result
         return True, results
     return False, results
 
@@ -78,7 +78,7 @@ def check_conditions_recursively(conditions, defined_variables, defined_actions)
                 result = check_condition(conds, defined_variables, defined_actions)
                 label = result.get('label')
                 operator = COMPARISON_OPERATOR_MAP[result.get('operator')] if result.get('operator') in COMPARISON_OPERATOR_MAP else result.get('operator')
-                value = result.get('value') or ""
+                value = result.get('value') if value is not None else ""
                 local_results.append({
                     "type": "condition",
                     "condition": f"{label} {operator} {value}",
@@ -88,7 +88,7 @@ def check_conditions_recursively(conditions, defined_variables, defined_actions)
                 break
 
         # Aggregate results: if all keys are conditions, we assume all must pass
-        overall_result = all(item["result"] for item in local_results)
+        overall_result = all(item["result"] if isinstance(item["result"], bool) else False for item in local_results)
         return overall_result, local_results
 
     final_result, results = _check(conditions)
@@ -107,7 +107,7 @@ def check_condition(condition, defined_variables, defined_actions):
     
     if comparison_value_condition:
         comparison_value = run_all(comparison_value_condition, defined_variables, defined_actions, stop_on_first_trigger=True, return_action_results=True)
-    
+        print(f"Comparison value condition result: {comparison_value}")
     if condition.get('expression'):
         # Parse the expression and execute it
         structured_expression = parse_math_expression(condition['expression'])
@@ -127,7 +127,7 @@ def check_condition(condition, defined_variables, defined_actions):
 
     variable_value = variable.value if isinstance(variable, BaseType) else variable
     comparison_value = comparison_value.value if isinstance(comparison_value, BaseType) else comparison_value
-    
+
     return {"condition_result": _do_operator_comparison(variable, operator, comparison_value),
             "label": label,
             "operator": operator,
@@ -162,10 +162,14 @@ def _do_operator_comparison(operator_type, operator_name, comparison_value):
     comparison_value is whatever python type to compare to
     returns a bool
     """
-    # print(operator_type.value, type(operator_type))
+
     def fallback(*args, **kwargs):
         raise AssertionError("Operator {0} does not exist for type {1}".format(
             operator_name, operator_type.__class__.__name__))
+    
+    if operator_type is None or operator_type.value is None:
+        return "N/A"
+    
     method = getattr(operator_type, operator_name, fallback)
 
     if getattr(method, 'input_type', '') == FIELD_NO_INPUT:
@@ -269,6 +273,8 @@ def execute_math_expression(ast_dict, defined_variables, defined_actions):
     if isinstance(ast_dict, dict):
         function_name = ast_dict["function"]
         args = [execute_math_expression(arg, defined_variables, defined_actions) for arg in ast_dict["args"]]
+        if None in args:
+            return None
         res = do_actions([{
             'function': function_name,
             'params': [args[0], args[1]]
@@ -276,7 +282,8 @@ def execute_math_expression(ast_dict, defined_variables, defined_actions):
         return res
     
     elif isinstance(ast_dict, str):
-        return _get_variable_value(defined_variables, ast_dict)
+        value = _get_variable_value(defined_variables, ast_dict)
+        return value if value.value is not None else None 
     # elif isinstance(ast_dict, (int, float)):
     #     return ast_dict
     else:
