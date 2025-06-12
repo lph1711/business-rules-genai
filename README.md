@@ -104,6 +104,7 @@ A variable of a condition can set in three different methods:
 1. Defined variables
 
 ```python
+# vonchusohuu >= 5000000000
 { 
   "name": "vonchusohuu",
   "operator": "greater_than_or_equal_to",
@@ -117,6 +118,7 @@ A variable of a condition can set in three different methods:
 
 2. Function calling
 ```python
+# percentage(doanhthu, 5000000) <= 30
 { 
   "function": "percentage",
   "params": ["doanhthu", 5000000],
@@ -132,6 +134,7 @@ A variable of a condition can set in three different methods:
 
 3. Math expression
 ```python
+# (vonchusohuu / doanhthu) * 100 <= 45
 { 
   "expression": "(vonchusohuu / doanhthu) * 100",
   "operator": "less_than_or_equal_to",
@@ -151,6 +154,7 @@ A value in a condition can also be set using a list of sub-conditions. Condition
   "name": "vonchusohuu",
   "operator": "less_than_or_equal_to",
   "value": [
+      # If customer_segment == "SME" => value = 0
       { "conditions": { "all": [
           { "name": "customer_segment",
             "operator": "equal_to",
@@ -158,10 +162,11 @@ A value in a condition can also be set using a list of sub-conditions. Condition
           }
       ]},
         "actions": [
-            { "name": "set_value_numeric",
+            { "name": "set_value_numeric", # Function to set the value
               "params": 0
             }]},
 
+      # Elif customer_segment == "MMLC" => value = 30
       { "conditions": { "all": [
           { "name": "customer_segment",
             "operator": "equal_to",
@@ -169,17 +174,18 @@ A value in a condition can also be set using a list of sub-conditions. Condition
           }
       ]},
         "actions": [
-            { "name": "set_value_numeric",
+            { "name": "set_value_numeric", # Function to set the value
               "params": 30
             }]},
 
-      { "conditions": { "all": [
-          { "function": "always_true",
+      # Else => value = 50
+      { "conditions": { "all": [  # Always True condition
+          { "function": "always_true", # This function will always return True
             "operator": "is_true"
           }
       ]},
         "actions": [
-            { "name": "set_value_numeric",
+            { "name": "set_value_numeric", # Function to set the value
               "params": 50
             }]}                 
   ]
@@ -253,6 +259,21 @@ rules = [
 }
 ]
 ```
+
+This translates directly to:
+
+> **vonchusohuu** >= 5000000000
+>
+> AND
+>
+> **percentage**(doanhthu, 200) <= [ x ]
+>>   if **customer_segment** == "SME" => 0
+>>   elif **customer_segment** == "MMLC" or **customer_segment** == "UE" => 30
+>>   else => 50
+>
+> AND
+>
+> (**vonchusohuu** / **doanhthu**) * 100 <= 50
 
 ## Run your rules
 
