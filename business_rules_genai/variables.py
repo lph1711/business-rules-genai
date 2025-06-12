@@ -4,9 +4,7 @@ from .utils import fn_name_to_pretty_label
 from .operators import (BaseType,
                         NumericType,
                         StringType,
-                        BooleanType,
-                        SelectType,
-                        SelectMultipleType)
+                        BooleanType)
 
 class BaseVariables(object):
     """ Classes that hold a collection of variables to use with the rules
@@ -54,8 +52,8 @@ def string_rule_variable(label=None):
 def boolean_rule_variable(label=None):
     return _rule_variable_wrapper(BooleanType, label)
 
-def select_rule_variable(label=None, options=None):
-    return rule_variable(SelectType, label=label, options=options)
+# def select_rule_variable(label=None, options=None):
+#     return rule_variable(SelectType, label=label, options=options)
 
-def select_multiple_rule_variable(label=None, options=None):
-    return rule_variable(SelectMultipleType, label=label, options=options)
+# def select_multiple_rule_variable(label=None, options=None):
+#     return rule_variable(SelectMultipleType, label=label, options=options)

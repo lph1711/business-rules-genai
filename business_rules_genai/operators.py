@@ -3,7 +3,7 @@ import re
 from functools import wraps
 from six import string_types, integer_types
 
-from .fields import (FIELD_TEXT, FIELD_NUMERIC, FIELD_NO_INPUT,
+from .fields import (FIELD_TEXT, FIELD_NUMERIC, FIELD_NO_INPUT, FIELD_LIST,
                      FIELD_SELECT, FIELD_SELECT_MULTIPLE)
 from .utils import fn_name_to_pretty_label, float_to_decimal
 from decimal import Decimal, Inexact, Context
@@ -46,7 +46,8 @@ def export_type(cls):
 
 
 def type_operator(input_type, label=None,
-                  assert_type_for_arguments=True):
+                  assert_type_for_arguments=True,
+                  comparison_type=None):
     """ Decorator to make a function into a type operator.
 
     - assert_type_for_arguments - if True this patches the operator function
@@ -58,6 +59,7 @@ def type_operator(input_type, label=None,
         func.label = label \
             or fn_name_to_pretty_label(func.__name__)
         func.input_type = input_type
+        func.comparison_type = comparison_type
 
         @wraps(func)
         def inner(self, *args, **kwargs):
@@ -79,7 +81,7 @@ class StringType(BaseType):
 
     def _assert_valid_value_and_cast(self, value):
         value = value or ""
-        if not isinstance(value, string_types):
+        if not isinstance(value, str):
             # raise AssertionError("{0} is not a valid string type.".
             #                      format(value))
             return None
@@ -112,7 +114,13 @@ class StringType(BaseType):
     @type_operator(FIELD_NO_INPUT)
     def non_empty(self):
         return bool(self.value)
-
+    
+    @type_operator(FIELD_TEXT, assert_type_for_arguments=False, comparison_type=FIELD_LIST)
+    def is_in(self, value_list):
+        """ Check if the string is in a list of values. """
+        if not isinstance(value_list, list):
+            raise ValueError("value_list must be a list")
+        return self.value in value_list
 
 @export_type
 class NumericType(BaseType):
@@ -137,10 +145,12 @@ class NumericType(BaseType):
     @type_operator(FIELD_NUMERIC)
     def equal_to(self, other_numeric):
         return abs(self.value - other_numeric) <= self.EPSILON
+        # return self.value == other_numeric
 
     @type_operator(FIELD_NUMERIC)
     def greater_than(self, other_numeric):
         return (self.value - other_numeric) > self.EPSILON
+        # return self.value > other_numeric
 
     @type_operator(FIELD_NUMERIC)
     def greater_than_or_equal_to(self, other_numeric):
@@ -149,12 +159,24 @@ class NumericType(BaseType):
     @type_operator(FIELD_NUMERIC)
     def less_than(self, other_numeric):
         return (other_numeric - self.value) > self.EPSILON
+        # return self.value < other_numeric
 
     @type_operator(FIELD_NUMERIC)
     def less_than_or_equal_to(self, other_numeric):
         return self.less_than(other_numeric) or self.equal_to(other_numeric)
+    
+    @type_operator(FIELD_NUMERIC, label="Is in range")
+    def between(self, lower_bound, upper_bound):
+        """ Check if the numeric value is between two bounds (exclusive). """
+        return self.greater_than(lower_bound) and \
+               self.less_than(upper_bound)
 
-
+    @type_operator(FIELD_NUMERIC, label="Is In Range equal")
+    def between_equal(self, lower_bound, upper_bound):
+        """ Check if the numeric value is between two bounds (inclusive). """
+        return self.greater_than_or_equal_to(lower_bound) and \
+               self.less_than_or_equal_to(upper_bound)
+    
 @export_type
 class BooleanType(BaseType):
 
@@ -175,85 +197,85 @@ class BooleanType(BaseType):
     def is_false(self):
         return not self.value
 
-@export_type
-class SelectType(BaseType):
+# @export_type
+# class SelectType(BaseType):
 
-    name = "select"
+#     name = "select"
 
-    def _assert_valid_value_and_cast(self, value):
-        if not hasattr(value, '__iter__'):
-            # raise AssertionError("{0} is not a valid select type".
-            #                      format(value))
-            return None
-        return value
+#     def _assert_valid_value_and_cast(self, value):
+#         if not hasattr(value, '__iter__'):
+#             # raise AssertionError("{0} is not a valid select type".
+#             #                      format(value))
+#             return None
+#         return value
 
-    @staticmethod
-    def _case_insensitive_equal_to(value_from_list, other_value):
-        if isinstance(value_from_list, string_types) and \
-                isinstance(other_value, string_types):
-                    return value_from_list.lower() == other_value.lower()
-        else:
-            return value_from_list == other_value
+#     @staticmethod
+#     def _case_insensitive_equal_to(value_from_list, other_value):
+#         if isinstance(value_from_list, string_types) and \
+#                 isinstance(other_value, string_types):
+#                     return value_from_list.lower() == other_value.lower()
+#         else:
+#             return value_from_list == other_value
 
-    @type_operator(FIELD_SELECT, assert_type_for_arguments=False)
-    def contains(self, other_value):
-        for val in self.value:
-            if self._case_insensitive_equal_to(val, other_value):
-                return True
-        return False
+#     @type_operator(FIELD_SELECT, assert_type_for_arguments=False)
+#     def contains(self, other_value):
+#         for val in self.value:
+#             if self._case_insensitive_equal_to(val, other_value):
+#                 return True
+#         return False
 
-    @type_operator(FIELD_SELECT, assert_type_for_arguments=False)
-    def does_not_contain(self, other_value):
-        for val in self.value:
-            if self._case_insensitive_equal_to(val, other_value):
-                return False
-        return True
+#     @type_operator(FIELD_SELECT, assert_type_for_arguments=False)
+#     def does_not_contain(self, other_value):
+#         for val in self.value:
+#             if self._case_insensitive_equal_to(val, other_value):
+#                 return False
+#         return True
 
 
-@export_type
-class SelectMultipleType(BaseType):
+# @export_type
+# class SelectMultipleType(BaseType):
 
-    name = "select_multiple"
+#     name = "select_multiple"
 
-    def _assert_valid_value_and_cast(self, value):
-        if not hasattr(value, '__iter__'):
-            # raise AssertionError("{0} is not a valid select multiple type".
-            #                      format(value))
-            return None
-        return value
+#     def _assert_valid_value_and_cast(self, value):
+#         if not hasattr(value, '__iter__'):
+#             # raise AssertionError("{0} is not a valid select multiple type".
+#             #                      format(value))
+#             return None
+#         return value
 
-    @type_operator(FIELD_SELECT_MULTIPLE)
-    def contains_all(self, other_value):
-        select = SelectType(self.value)
-        for other_val in other_value:
-            if not select.contains(other_val):
-                return False
-        return True
+#     @type_operator(FIELD_SELECT_MULTIPLE)
+#     def contains_all(self, other_value):
+#         select = SelectType(self.value)
+#         for other_val in other_value:
+#             if not select.contains(other_val):
+#                 return False
+#         return True
 
-    @type_operator(FIELD_SELECT_MULTIPLE)
-    def is_contained_by(self, other_value):
-        other_select_multiple = SelectMultipleType(other_value)
-        return other_select_multiple.contains_all(self.value)
+#     @type_operator(FIELD_SELECT_MULTIPLE)
+#     def is_contained_by(self, other_value):
+#         other_select_multiple = SelectMultipleType(other_value)
+#         return other_select_multiple.contains_all(self.value)
 
-    @type_operator(FIELD_SELECT_MULTIPLE)
-    def shares_at_least_one_element_with(self, other_value):
-        select = SelectType(self.value)
-        for other_val in other_value:
-            if select.contains(other_val):
-                return True
-        return False
+#     @type_operator(FIELD_SELECT_MULTIPLE)
+#     def shares_at_least_one_element_with(self, other_value):
+#         select = SelectType(self.value)
+#         for other_val in other_value:
+#             if select.contains(other_val):
+#                 return True
+#         return False
 
-    @type_operator(FIELD_SELECT_MULTIPLE)
-    def shares_exactly_one_element_with(self, other_value):
-        found_one = False
-        select = SelectType(self.value)
-        for other_val in other_value:
-            if select.contains(other_val):
-                if found_one:
-                    return False
-                found_one = True
-        return found_one
+#     @type_operator(FIELD_SELECT_MULTIPLE)
+#     def shares_exactly_one_element_with(self, other_value):
+#         found_one = False
+#         select = SelectType(self.value)
+#         for other_val in other_value:
+#             if select.contains(other_val):
+#                 if found_one:
+#                     return False
+#                 found_one = True
+#         return found_one
 
-    @type_operator(FIELD_SELECT_MULTIPLE)
-    def shares_no_elements_with(self, other_value):
-        return not self.shares_at_least_one_element_with(other_value)
+#     @type_operator(FIELD_SELECT_MULTIPLE)
+#     def shares_no_elements_with(self, other_value):
+#         return not self.shares_at_least_one_element_with(other_value)

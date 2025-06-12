@@ -18,6 +18,8 @@ Each variable must be defined with correct data types, since each data type will
 * `less_than`
 * `greater_than_or_equal_to`
 * `less_than_or_equal_to`
+* `between`
+* `between_equal`
 
 **string** - a python bytestring or unicode string.
 
@@ -29,6 +31,7 @@ Each variable must be defined with correct data types, since each data type will
 * `contains`
 * `matches_regex`
 * `non_empty`
+* `is_in`
 
 **boolean** - a True or False value.
 
@@ -148,12 +151,12 @@ A variable of a condition can set in three different methods:
 
 ### Condition value
 
-A value in a condition can also be set using a list of sub-conditions. Conditions inside the list will be evaluated top-down, and will stop after the first trigger. Then the value will be set using the action "set_value_numeric" or "set_value"string" according to the data type. For example:
+A value in a condition can also be set using a list of sub-conditions, using **"value_condition"**. Conditions inside the list will be evaluated top-down, and will stop after the first trigger. Then the value will be set using the action "set_value_numeric" or "set_value"string" according to the data type. For example:
 ```python
 { 
   "name": "vonchusohuu",
   "operator": "less_than_or_equal_to",
-  "value": [
+  "value_condition": [
       # If customer_segment == "SME" => value = 0
       { "conditions": { "all": [
           { "name": "customer_segment",
@@ -207,7 +210,7 @@ rules = [
       { "function": "percentage",
         "params": ["doanhthu", 200],
         "operator": "less_than_or_equal_to",
-        "value": [
+        "value_condition": [
           #First condition
             { "conditions": { "all": [
                 { "name": "customer_segment",

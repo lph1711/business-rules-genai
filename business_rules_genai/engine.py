@@ -1,4 +1,4 @@
-from .fields import FIELD_NO_INPUT
+from .fields import FIELD_NO_INPUT, FIELD_LIST
 from business_rules_genai.operators import NumericType, BaseType, COMPARISON_OPERATOR_MAP
 import ast
 import logging
@@ -76,10 +76,12 @@ def check_conditions_recursively(conditions, defined_variables, defined_actions)
             else:
                 # This is a base case condition
                 result = check_condition(conds, defined_variables, defined_actions)
+                label = result.get('label')
                 operator = COMPARISON_OPERATOR_MAP[result.get('operator')] if result.get('operator') in COMPARISON_OPERATOR_MAP else result.get('operator')
+                value = result.get('value') or ""
                 local_results.append({
                     "type": "condition",
-                    "condition": f"{result.get('label')} {operator} {str(result.get('value'))}",
+                    "condition": f"{label} {operator} {value}",
                     "input": result.get('function_result') if conds.get('function') or conds.get('expression') else _get_variable_value(defined_variables, conds['name']).value,
                     "result": result.get('condition_result')
                 })
@@ -99,17 +101,13 @@ def check_condition(condition, defined_variables, defined_actions):
     object must have a variable defined for any variables in this condition.
     """
     operator = condition.get('operator')
-    value = condition.get('value')
+    comparison_value = condition.get('value')
+    comparison_value_condition = condition.get('value_condition')
     variable = None
     
-    if isinstance(value, list):
-        # If the value is a list, we need to run all the actions in the list
-        value = run_all(value, defined_variables, defined_actions, stop_on_first_trigger=True, return_action_results=True)
-    # elif isinstance(value, str):
-    #     # If the value is a string, we assume it's a variable name
-    #     temp_value = _get_variable_value(defined_variables, value)
-    #     if temp_value:
-    #         value = temp_value
+    if comparison_value_condition:
+        comparison_value = run_all(comparison_value_condition, defined_variables, defined_actions, stop_on_first_trigger=True, return_action_results=True)
+    
     if condition.get('expression'):
         # Parse the expression and execute it
         structured_expression = parse_math_expression(condition['expression'])
@@ -126,12 +124,14 @@ def check_condition(condition, defined_variables, defined_actions):
     else:
         variable = _get_variable_value(defined_variables, condition.get('name'))
         label = condition.get('label') or condition.get('name')
-    variable_value = variable.value if isinstance(variable, BaseType) else variable
 
-    return {"condition_result": _do_operator_comparison(variable, operator, value),
+    variable_value = variable.value if isinstance(variable, BaseType) else variable
+    comparison_value = comparison_value.value if isinstance(comparison_value, BaseType) else comparison_value
+    
+    return {"condition_result": _do_operator_comparison(variable, operator, comparison_value),
             "label": label,
             "operator": operator,
-            "value": value.value if isinstance(value, BaseType) else value,
+            "value": comparison_value,
             "function_result": variable_value}
 
 def _get_variable_value(defined_variables, name):
@@ -167,8 +167,15 @@ def _do_operator_comparison(operator_type, operator_name, comparison_value):
         raise AssertionError("Operator {0} does not exist for type {1}".format(
             operator_name, operator_type.__class__.__name__))
     method = getattr(operator_type, operator_name, fallback)
+
     if getattr(method, 'input_type', '') == FIELD_NO_INPUT:
         return method()
+    
+    if getattr(method, 'comparison_type', '') == FIELD_LIST:
+        return method(comparison_value)
+    
+    if isinstance(comparison_value, list):
+        return method(*comparison_value)
     return method(comparison_value)
 
 
