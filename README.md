@@ -271,7 +271,9 @@ This translates directly to:
 >
 > **percentage**(doanhthu, 200) <= [ x ]
 >>   if **customer_segment** == "SME" => 0
+>> 
 >>   elif **customer_segment** == "MMLC" or **customer_segment** == "UE" => 30
+>> 
 >>   else => 50
 >
 > AND
