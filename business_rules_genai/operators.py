@@ -80,8 +80,7 @@ class StringType(BaseType):
     name = "string"
 
     def _assert_valid_value_and_cast(self, value):
-        value = value or ""
-        if not isinstance(value, str):
+        if value is None or not isinstance(value, str):
             # raise AssertionError("{0} is not a valid string type.".
             #                      format(value))
             return None
@@ -109,7 +108,7 @@ class StringType(BaseType):
 
     @type_operator(FIELD_TEXT)
     def matches_regex(self, regex):
-        return re.search(regex, self.value)
+        return bool(re.search(regex, self.value))
 
     @type_operator(FIELD_NO_INPUT)
     def non_empty(self):
