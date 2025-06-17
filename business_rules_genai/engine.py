@@ -173,7 +173,7 @@ def _do_operator_comparison(operator_type, operator_name, comparison_value):
         raise AssertionError("Operator {0} does not exist for type {1}".format(
             operator_name, operator_type.__class__.__name__))
     
-    if operator_type is None or operator_type.value is None:
+    if operator_type is None or operator_type.value is None or comparison_value is None:
         return "N/A"
     
     method = getattr(operator_type, operator_name, fallback)
