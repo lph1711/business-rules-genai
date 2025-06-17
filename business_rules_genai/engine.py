@@ -79,10 +79,16 @@ def check_conditions_recursively(conditions, defined_variables, defined_actions)
                 label = result.get('label')
                 operator = COMPARISON_OPERATOR_MAP[result.get('operator')] if result.get('operator') in COMPARISON_OPERATOR_MAP else result.get('operator')
                 value = result.get('value') if value is not None else ""
+                if conds.get('function') or conds.get('expression'):
+                    input = result.get('function_result')
+                elif _get_variable_value(defined_variables, conds['name']):
+                    input = _get_variable_value(defined_variables, conds['name']).value
+                else:
+                    input = None
                 local_results.append({
                     "type": "condition",
                     "condition": f"{label} {operator} {value}",
-                    "input": result.get('function_result') if conds.get('function') or conds.get('expression') else _get_variable_value(defined_variables, conds['name']).value,
+                    "input": input,
                     "result": result.get('condition_result')
                 })
                 break
@@ -107,7 +113,7 @@ def check_condition(condition, defined_variables, defined_actions):
     
     if comparison_value_condition:
         comparison_value = run_all(comparison_value_condition, defined_variables, defined_actions, stop_on_first_trigger=True, return_action_results=True)
-        print(f"Comparison value condition result: {comparison_value}")
+
     if condition.get('expression'):
         # Parse the expression and execute it
         structured_expression = parse_math_expression(condition['expression'])
@@ -152,7 +158,7 @@ def _get_variable_value(defined_variables, name):
         return None
     method = getattr(defined_variables, name, fallback)
     val = method()
-    return method.field_type(val)
+    return method.field_type(val) if val else None
 
 def _do_operator_comparison(operator_type, operator_name, comparison_value):
     """ Finds the method on the given operator_type and compares it to the
@@ -196,13 +202,14 @@ def do_actions(actions, defined_variables, defined_actions):
         elif not isinstance(params, list):
             params = [params]
 
+        print(f"Executing action: {method_name} with params: {params}")
         # Process all parameters for variable substitution
         processed_params = [
             _get_variable_value(defined_variables, param) or param 
             if isinstance(param, str) else param
             for param in params
         ]
-        
+        print(f"Processed parameters: {processed_params}")
         method = getattr(defined_actions, method_name, fallback)
         try:
             method_signature = inspect.signature(method)
