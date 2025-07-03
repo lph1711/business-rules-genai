@@ -1,5 +1,5 @@
 from .fields import FIELD_NO_INPUT, FIELD_LIST
-from business_rules_genai.operators import NumericType, BaseType, COMPARISON_OPERATOR_MAP
+from business_rules_genai.operators import NumericType, BooleanType, BaseType, COMPARISON_OPERATOR_MAP
 import ast
 import logging
 import inspect
@@ -76,15 +76,28 @@ def check_conditions_recursively(conditions, defined_variables, defined_actions)
             else:
                 # This is a base case condition
                 result = check_condition(conds, defined_variables, defined_actions)
+
                 label = result.get('label')
                 operator = COMPARISON_OPERATOR_MAP[result.get('operator')] if result.get('operator') in COMPARISON_OPERATOR_MAP else result.get('operator')
                 value = result.get('value') if value is not None else ""
+
                 if conds.get('function') or conds.get('expression'):
                     input = result.get('function_result')
-                elif _get_variable_value(defined_variables, conds['name']):
+
+                elif conds.get('name') and _get_variable_value(defined_variables, conds['name']):
                     input = _get_variable_value(defined_variables, conds['name']).value
+    
+                elif label and not conds.get('name'):
+                    local_results.append({
+                        "type": "display",
+                        "label": label,
+                        "threshold": result.get('threshold')
+                    })
+                    break
+
                 else:
                     input = None
+                    
                 local_results.append({
                     "type": "condition",
                     "condition": f"{label} {operator} {value}",
@@ -94,7 +107,7 @@ def check_conditions_recursively(conditions, defined_variables, defined_actions)
                 break
 
         # Aggregate results: if all keys are conditions, we assume all must pass
-        overall_result = all(item["result"] if isinstance(item["result"], bool) else False for item in local_results)
+        overall_result = all(item["result"] if isinstance(item.get("result"), bool) and item.get("type") != 'display' else False for item in local_results)
         return overall_result, local_results
 
     final_result, results = _check(conditions)
@@ -127,10 +140,19 @@ def check_condition(condition, defined_variables, defined_actions):
         }], defined_variables, defined_actions)
 
         label = condition.get('label') or f"{condition['function']}({', '.join(f'{param}' for param in condition.get('params', []))})"
-    else:
+
+    elif condition.get('name'):
         variable = _get_variable_value(defined_variables, condition.get('name'))
         label = condition.get('label') or condition.get('name')
 
+    elif condition.get('label'):
+        comparison_value = comparison_value.value if isinstance(comparison_value, BaseType) else comparison_value
+
+        return {
+            "label": condition.get('label'),
+            "threshold": comparison_value
+        }
+    
     variable_value = variable.value if isinstance(variable, BaseType) else variable
     comparison_value = comparison_value.value if isinstance(comparison_value, BaseType) else comparison_value
 
@@ -172,10 +194,10 @@ def _do_operator_comparison(operator_type, operator_name, comparison_value):
     def fallback(*args, **kwargs):
         raise AssertionError("Operator {0} does not exist for type {1}".format(
             operator_name, operator_type.__class__.__name__))
-    
-    if operator_type is None or operator_type.value is None or comparison_value is None:
+
+    if not isinstance(operator_type, BooleanType) and (operator_type is None or operator_type.value is None or comparison_value is None):
         return "N/A"
-    
+
     method = getattr(operator_type, operator_name, fallback)
 
     if getattr(method, 'input_type', '') == FIELD_NO_INPUT:
