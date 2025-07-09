@@ -5,9 +5,9 @@ business-rules-genai
 
 ## 1. Define Your set of variables
 
-You define all the available variables for a certain kind of object in your code, and then later dynamically set the conditions and thresholds for those.
+You define the object that has all the variables, and then later dynamically set the conditions and thresholds for those.
 
-Each variable must be defined with correct data types, since each data type will have its own set of operators. Current supported data types (and theirs operators) are:
+Each data type will have its own set of operators. Current supported data types (and theirs operators) are:
 
 **numeric** - an integer, float, or python Decimal.
 
@@ -43,26 +43,23 @@ Each variable must be defined with correct data types, since each data type will
 For example:
 
 ```python
-class CompanyVariables(BaseVariables):
+class CompanyDetails():
+  has_chbh_hdbh: Optional[bool] = None
+  tienvatuongduongtien: Optional[Tuple[Any, Any]] = None
+  sum_duno_vnd: Optional[int] = None
+  sum_duno_usd: Optional[int] = None
+  sum_duno_other: Optional[int] = None
 
-    def __init__(self, company):
-        self.company = company
+# OR
 
-    @string_rule_variable
-    def customer_segment(self):
-        return self.company.customerSegment
-    
-    @numeric_rule_variable
-    def doanhthu(self):
-        return self.company.customerRevenue
-    
-    @numeric_rule_variable
-    def vonchusohuu(self):
-        return self.company.vonchusohuu
-      
-    @boolean_rule_variable
-    def engagedInImportsExports(self):
-        return self.company['engagedInImportsExports'] == "x"
+companyDetails = {
+  'tax_code': 0,
+  'orgnbr_code': 0,
+  'max_nhom_no': "01",
+  
+  'ownersEquity': 50,
+  'customerRevenue': 100,
+}
 ```
 
 ## 2. Define your set of functions
@@ -285,12 +282,12 @@ This translates directly to:
 ```python
 from business_rules import run_all
 
+companyDetails = CompanyDetails()
 rules = _some_function_to_extract_rule_set()
 
-for product in Products.objects.all():
-    run_all(rule_list=rules,
-            defined_variables=ProductVariables(product),
-            defined_actions=ProductActions(product),
-            stop_on_first_trigger=True
-           )
+run_all(rule_list=rules,
+        defined_variables=companyDetails,
+        defined_actions=CompanyActions(companyDetails),
+        stop_on_first_trigger=True
+        )
 ```
