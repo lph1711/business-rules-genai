@@ -1,8 +1,9 @@
 from .fields import FIELD_NO_INPUT, FIELD_LIST
-from business_rules_genai.operators import NumericType, BooleanType, BaseType, COMPARISON_OPERATOR_MAP
+from business_rules_genai.operators import NumericType, BooleanType, BaseType, StringType, COMPARISON_OPERATOR_MAP
 import ast
 import logging
 import inspect
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 def run_all(rule_list,
@@ -169,18 +170,28 @@ def _get_variable_value(defined_variables, name):
 
     Returns an instance of operators.BaseType
     """
-    # if type(name) == str:
-    #     print(name, type(name))
-    # else:
-    #     print(name.value, type(name))
     def fallback(*args, **kwargs):
         # raise AssertionError("Variable {0} is not defined in class {1}".format(
         #         name, defined_variables.__class__.__name__))
-        logger.info(f"Variable {name} is not defined in class {defined_variables.__class__.__name__}")
+        logger.info(f"Variable {name} is not defined")
         return None
-    method = getattr(defined_variables, name, fallback)
-    val = method()
-    return method.field_type(val) if val else None
+    
+    if isinstance(defined_variables, dict):
+        val = defined_variables.get(name, None)
+    else:
+        val = getattr(defined_variables, name, fallback)
+    
+    if isinstance(val, (int, float, Decimal)):
+        return NumericType(val)
+    
+    elif isinstance(val, bool):
+        return BooleanType(val)
+    
+    elif isinstance(val, str):
+        return StringType(val)
+    
+    else:
+        return None
 
 def _do_operator_comparison(operator_type, operator_name, comparison_value):
     """ Finds the method on the given operator_type and compares it to the

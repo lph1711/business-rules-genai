@@ -130,12 +130,14 @@ class NumericType(BaseType):
     @staticmethod
     def _assert_valid_value_and_cast(value):
         if isinstance(value, float):
-            # In python 2.6, casting float to Decimal doesn't work
             return float_to_decimal(value)
+        
         if isinstance(value, integer_types):
             return Decimal(value)
+        
         if isinstance(value, Decimal):
             return value
+        
         else:
             # raise AssertionError("{0} is not a valid numeric type.".
             #                      format(value))
@@ -195,86 +197,3 @@ class BooleanType(BaseType):
     @type_operator(FIELD_NO_INPUT)
     def is_false(self):
         return not self.value
-
-# @export_type
-# class SelectType(BaseType):
-
-#     name = "select"
-
-#     def _assert_valid_value_and_cast(self, value):
-#         if not hasattr(value, '__iter__'):
-#             # raise AssertionError("{0} is not a valid select type".
-#             #                      format(value))
-#             return None
-#         return value
-
-#     @staticmethod
-#     def _case_insensitive_equal_to(value_from_list, other_value):
-#         if isinstance(value_from_list, string_types) and \
-#                 isinstance(other_value, string_types):
-#                     return value_from_list.lower() == other_value.lower()
-#         else:
-#             return value_from_list == other_value
-
-#     @type_operator(FIELD_SELECT, assert_type_for_arguments=False)
-#     def contains(self, other_value):
-#         for val in self.value:
-#             if self._case_insensitive_equal_to(val, other_value):
-#                 return True
-#         return False
-
-#     @type_operator(FIELD_SELECT, assert_type_for_arguments=False)
-#     def does_not_contain(self, other_value):
-#         for val in self.value:
-#             if self._case_insensitive_equal_to(val, other_value):
-#                 return False
-#         return True
-
-
-# @export_type
-# class SelectMultipleType(BaseType):
-
-#     name = "select_multiple"
-
-#     def _assert_valid_value_and_cast(self, value):
-#         if not hasattr(value, '__iter__'):
-#             # raise AssertionError("{0} is not a valid select multiple type".
-#             #                      format(value))
-#             return None
-#         return value
-
-#     @type_operator(FIELD_SELECT_MULTIPLE)
-#     def contains_all(self, other_value):
-#         select = SelectType(self.value)
-#         for other_val in other_value:
-#             if not select.contains(other_val):
-#                 return False
-#         return True
-
-#     @type_operator(FIELD_SELECT_MULTIPLE)
-#     def is_contained_by(self, other_value):
-#         other_select_multiple = SelectMultipleType(other_value)
-#         return other_select_multiple.contains_all(self.value)
-
-#     @type_operator(FIELD_SELECT_MULTIPLE)
-#     def shares_at_least_one_element_with(self, other_value):
-#         select = SelectType(self.value)
-#         for other_val in other_value:
-#             if select.contains(other_val):
-#                 return True
-#         return False
-
-#     @type_operator(FIELD_SELECT_MULTIPLE)
-#     def shares_exactly_one_element_with(self, other_value):
-#         found_one = False
-#         select = SelectType(self.value)
-#         for other_val in other_value:
-#             if select.contains(other_val):
-#                 if found_one:
-#                     return False
-#                 found_one = True
-#         return found_one
-
-#     @type_operator(FIELD_SELECT_MULTIPLE)
-#     def shares_no_elements_with(self, other_value):
-#         return not self.shares_at_least_one_element_with(other_value)
