@@ -1,7 +1,6 @@
 import inspect
 import re
 from functools import wraps
-from six import string_types, integer_types
 
 from .fields import (FIELD_TEXT, FIELD_NUMERIC, FIELD_NO_INPUT, FIELD_LIST,
                      FIELD_SELECT, FIELD_SELECT_MULTIPLE)
@@ -132,7 +131,7 @@ class NumericType(BaseType):
         if isinstance(value, float):
             return float_to_decimal(value)
         
-        if isinstance(value, integer_types):
+        if isinstance(value, int):
             return Decimal(value)
         
         if isinstance(value, Decimal):
