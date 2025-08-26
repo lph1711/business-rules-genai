@@ -6,6 +6,7 @@ import inspect
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
 def run_all(rule_list,
             defined_variables,
             defined_actions,
@@ -13,25 +14,31 @@ def run_all(rule_list,
             return_action_results=False):
     results = []
     rule_was_triggered = False
+
     for rule in rule_list:
         passed, detailed_results = run(rule, defined_variables, defined_actions, return_action_results)
         if return_action_results and passed:
-            return detailed_results
-        results += detailed_results
+            return True, detailed_results
+        
+        results.extend(detailed_results)
         if passed:
             rule_was_triggered = True
             if stop_on_first_trigger:
                 return True, results
+            
     return rule_was_triggered, results 
 
 def run(rule, defined_variables, defined_actions, return_action_results=False):
     conditions, actions = rule.get('conditions', {}), rule.get('actions', {})
+
     rule_triggered, results = check_conditions_recursively(conditions, defined_variables, defined_actions)
+
     if rule_triggered:
         action_result = do_actions(actions, defined_variables, defined_actions)
         if return_action_results:
             return True, action_result
         return True, results
+    
     return False, results
 
 def check_conditions_recursively(conditions, defined_variables, defined_actions):
@@ -122,11 +129,11 @@ def check_condition(condition, defined_variables, defined_actions):
     """
     operator = condition.get('operator')
     comparison_value = condition.get('value')
-    comparison_value_condition = condition.get('value_condition')
+    value_condition_list = condition.get('value_condition')
     variable = None
     
-    if comparison_value_condition:
-        comparison_value = run_all(comparison_value_condition, defined_variables, defined_actions, stop_on_first_trigger=True, return_action_results=True)
+    if value_condition_list:
+        comparison_value = _resolve_value_condition(value_condition_list, defined_variables, defined_actions)
 
     if condition.get('expression'):
         # Parse the expression and execute it
@@ -163,6 +170,28 @@ def check_condition(condition, defined_variables, defined_actions):
             "value": comparison_value,
             "function_result": variable_value}
 
+def _resolve_value_condition(value_conditions, defined_variables, defined_actions):
+    """
+    Resolve 'value_condition' array to a single value:
+      - For the first branch whose 'conditions' evaluate to True,
+        return its 'value' (if present) OR the result of its 'actions' (if provided).
+      - If no branch matches, raise an error (explicit is better than implicit).
+    """
+    for branch in value_conditions:
+        branch_conditions = branch.get('conditions', {}) or {}
+        matched, _ = check_conditions_recursively(branch_conditions, defined_variables, defined_actions)
+        if matched:
+            if 'value' in branch:
+                val = branch['value']
+                return val.value if isinstance(val, BaseType) else val
+            actions = branch.get('actions') or []
+            if actions:
+                return do_actions(actions, defined_variables, defined_actions)
+            # Fallback if branch has neither: treat as explicit None
+            return None
+
+    raise RuntimeError("No matching value_condition branch")
+
 def _get_variable_value(defined_variables, name):
     """ Call the function provided on the defined_variables object with the
     given name (raise exception if that doesn't exist) and casts it to the
@@ -170,18 +199,16 @@ def _get_variable_value(defined_variables, name):
 
     Returns an instance of operators.BaseType
     """
-    def fallback(*args, **kwargs):
-        # raise AssertionError("Variable {0} is not defined in class {1}".format(
-        #         name, defined_variables.__class__.__name__))
-        logger.info(f"Variable {name} is not defined")
-        return None
-    
+    val = None
     if isinstance(defined_variables, dict):
         val = defined_variables.get(name, None)
-    else:
-        val = getattr(defined_variables, name, fallback)
+    elif hasattr(defined_variables, name):
+        val = getattr(defined_variables, name)
     
-    if isinstance(val, (int, float, Decimal)):
+    if isinstance(val, BaseType):
+        return val
+    
+    elif isinstance(val, (int, float, Decimal)):
         return NumericType(val)
     
     elif isinstance(val, bool):
@@ -189,7 +216,7 @@ def _get_variable_value(defined_variables, name):
     
     elif isinstance(val, str):
         return StringType(val)
-    
+
     else:
         return None
 
@@ -219,10 +246,12 @@ def _do_operator_comparison(operator_type, operator_name, comparison_value):
     
     if isinstance(comparison_value, list):
         return method(*comparison_value)
+
     return method(comparison_value)
 
 
 def do_actions(actions, defined_variables, defined_actions):
+    result = None
     for action in actions:
         method_name = action.get('function') or action.get('name')
         def fallback(*args, **kwargs):
@@ -234,26 +263,27 @@ def do_actions(actions, defined_variables, defined_actions):
             params = []
         elif not isinstance(params, list):
             params = [params]
-
-        print(f"Executing action: {method_name} with params: {params}")
+        
         # Process all parameters for variable substitution
         processed_params = [
             _get_variable_value(defined_variables, param) or param 
             if isinstance(param, str) else param
             for param in params
         ]
-        print(f"Processed parameters: {processed_params}")
+        print(f"Executing action: {method_name} with params: {processed_params}")
+
         method = getattr(defined_actions, method_name, fallback)
         try:
             method_signature = inspect.signature(method)
             if len(method_signature.parameters) != len(processed_params):
                 raise AssertionError(f"Action {method_name} expects {len(method_signature.parameters)} parameters, but got {len(processed_params)}.")
-            return method(*processed_params)
+            result = method(*processed_params)
         except AssertionError:
             raise
         except Exception as e:
             raise RuntimeError(f"'{method_name}': {e}")
-            
+    
+    return result
         
 
 OPERATOR_MAP = {
