@@ -1,293 +1,155 @@
-business-rules-genai
-==============
+# business-rules-genai
 
-# Usage
+Modernised business rules engine with a JSON-friendly DSL and pluggable actions.
 
-## 1. Define Your set of variables
-
-You define the object that has all the variables, and then later dynamically set the conditions and thresholds for those.
-
-Each data type will have its own set of operators. Current supported data types (and theirs operators) are:
-
-**numeric** - an integer, float, or python Decimal.
-
-`@numeric_rule_variable` operators:
-
-* `equal_to`
-* `greater_than`
-* `less_than`
-* `greater_than_or_equal_to`
-* `less_than_or_equal_to`
-* `between`
-* `between_equal`
-
-**string** - a python bytestring or unicode string.
-
-`@string_rule_variable` operators:
-
-* `equal_to`
-* `starts_with`
-* `ends_with`
-* `contains`
-* `matches_regex`
-* `non_empty`
-* `is_in`
-
-**boolean** - a True or False value.
-
-`@boolean_rule_variable` operators:
-
-* `is_true`
-* `is_false`
-
-For example:
+## Quick start
 
 ```python
-class CompanyDetails():
-  has_chbh_hdbh: Optional[bool] = None
-  tienvatuongduongtien: Optional[Tuple[Any, Any]] = None
-  sum_duno_vnd: Optional[int] = None
-  sum_duno_usd: Optional[int] = None
-  sum_duno_other: Optional[int] = None
+from dataclasses import dataclass
 
-# OR
+from business_rules_genai.actions import BaseActions
+from business_rules_genai.engine import run_all
 
-companyDetails = {
-  'tax_code': 0,
-  'orgnbr_code': 0,
-  'max_nhom_no': "01",
-  
-  'ownersEquity': 50,
-  'customerRevenue': 100,
+
+@dataclass
+class Customer:
+    revenue: int
+    cost: int
+    segment: str
+
+
+class CustomerActions(BaseActions):
+    def margin(self, revenue, cost):
+        revenue = revenue.value if hasattr(revenue, \"value\") else revenue
+        cost = cost.value if hasattr(cost, \"value\") else cost
+        if not cost:
+            return self.set_value_numeric(0)
+        return self.set_value_numeric((revenue - cost) / cost)
+
+
+customer = Customer(revenue=125, cost=50, segment=\"SME\")
+actions = CustomerActions()
+
+rule = {
+    \"conditions\": {
+        \"all\": [
+            {\"name\": \"revenue\", \"operator\": \"greater_than\", \"value\": 100},
+            {
+                \"function\": \"margin\",
+                \"params\": [\"revenue\", \"cost\"],
+                \"operator\": \"greater_than_or_equal_to\",
+                \"value\": 1,
+            },
+        ]
+    },
+    \"actions\": [{\"function\": \"set_value_string\", \"params\": \"preferred\"}],
+}
+
+triggered, trace = run_all([rule], vars(customer), actions)
+print(triggered)  # True
+```
+
+The engine accepts either dictionaries or attribute-bearing objects for variables. Actions are regular Python methods that should return one of the wrapper types (`NumericType`, `StringType`, `BooleanType`) already provided by the package.
+
+## Rule building blocks
+
+### Variables
+
+Access variables by name. The engine automatically wraps raw values into the appropriate operator types:
+
+```json
+{\"name\": \"revenue\", \"operator\": \"greater_than\", \"value\": 100}
+```
+
+If you need to show static information in the UI you can provide a labelled block without an operator:
+
+```json
+{\"label\": \"Customer must pass KYC\", \"value\": true}
+```
+
+### Functions and expressions
+
+- `function`: call an action before applying an operator.
+- `expression`: describe simple math (`+`, `-`, `*`, `/`). Expressions are transpiled into nested action calls so you can reuse the same arithmetic implementations as rule actions.
+
+```json
+{
+  \"function\": \"percentage\",
+  \"params\": [\"revenue\", 200],
+  \"operator\": \"less_than_or_equal_to\",
+  \"value\": 30
 }
 ```
 
-## 2. Define your set of functions
-
-These are the functions that are available to be used when a function is called or a condition is triggered.
-
-A defined function must return a NumericType or StringType or BooleanType
-
-For example:
-
-```python
-class CompanyActions(BaseActions):
-
-    def __init__(self, company):
-        self.company = company
-
-    def percentage(self, value1, value2):
-        if isinstance(value1, NumericType):
-            value1 = value1.value
-        if isinstance(value2, NumericType):
-            value2 = value2.value
-
-        if value2 == 0:
-            return NumericType(0)
-        return NumericType(round((value1 / value2) * 100))
-
-    def add(self, value1, value2):
-        if isinstance(value1, NumericType):
-            value1 = value1.value
-        if isinstance(value2, NumericType):
-            value2 = value2.value
-        return NumericType(value1 - value2)
-```
-
-## 3. Build the rules
-
-A rule is just a JSON object that gets interpreted by the business-rules-genai engine.
-
-### Variable
-A variable of a condition can set in three different methods:
-
-1. Defined variables
-
-```python
-# vonchusohuu >= 5000000000
-{ 
-  "name": "vonchusohuu",
-  "operator": "greater_than_or_equal_to",
-  "value": 5000000000,
+```json
+{
+  \"expression\": \"(cash / liabilities) * 100\",
+  \"operator\": \"greater_than\",
+  \"value\": 45
 }
 ```
 
-- "name": the name of the defined variable in CompanyVariables class
-- "operator": the comparing operator
-- "value": value to compared to
+### Conditional values
 
-2. Function calling
-```python
-# percentage(doanhthu, 5000000) <= 30
-{ 
-  "function": "percentage",
-  "params": ["doanhthu", 5000000],
-  "operator": "less_than_or_equal_to",
-  "value": 30
-}
-```
+`value_condition` lets you derive the comparison value dynamically. Each branch contains a nested rule and either a literal `value` or a list of `actions` to execute.
 
-- "function": the name of the defined function in CompanyActions class
-- "variable_params": a list of parameter for the function. A parameter can be a defined variable from CompanyVariables class or a specific value
-- "operator": the comparing operator
-- "value": value to compared to
-
-3. Math expression
-```python
-# (vonchusohuu / doanhthu) * 100 <= 45
-{ 
-  "expression": "(vonchusohuu / doanhthu) * 100",
-  "operator": "less_than_or_equal_to",
-  "value": 45,
-}
-```
-
-- "expression": the mathematical expression (4 basic operators are supported: +, -, x, /)
-- "operator": the comparing operator
-- "value": value to compared to
-
-### Condition value
-
-A value in a condition can also be set using a list of sub-conditions, using **"value_condition"**. Conditions inside the list will be evaluated top-down, and will stop after the first trigger. Then the value will be set using the action "set_value_numeric" or "set_value"string" according to the data type. For example:
-```python
-{ 
-  "name": "vonchusohuu",
-  "operator": "less_than_or_equal_to",
-  "value_condition": [
-      # If customer_segment == "SME" => value = 0
-      { "conditions": { "all": [
-          { "name": "customer_segment",
-            "operator": "equal_to",
-            "value": "SME",
-          }
-      ]},
-        "actions": [
-            { "name": "set_value_numeric", # Function to set the value
-              "params": 0
-            }]},
-
-      # Elif customer_segment == "MMLC" => value = 30
-      { "conditions": { "all": [
-          { "name": "customer_segment",
-            "operator": "equal_to",
-            "value": "MMLC",
-          }
-      ]},
-        "actions": [
-            { "name": "set_value_numeric", # Function to set the value
-              "params": 30
-            }]},
-
-      # Else => value = 50
-      { "conditions": { "all": [  # Always True condition
-          { "function": "always_true", # This function will always return True
-            "operator": "is_true"
-          }
-      ]},
-        "actions": [
-            { "name": "set_value_numeric", # Function to set the value
-              "params": 50
-            }]}                 
+```json
+{
+  \"name\": \"margin\",
+  \"operator\": \"greater_than_or_equal_to\",
+  \"value_condition\": [
+    {
+      \"conditions\": {\"all\": [{\"name\": \"segment\", \"operator\": \"equal_to\", \"value\": \"SME\"}]},
+      \"value\": 10
+    },
+    {
+      \"conditions\": {\"all\": [{\"function\": \"always_true\", \"operator\": \"is_true\"}]},
+      \"actions\": [{\"function\": \"set_value_numeric\", \"params\": 5}]
+    }
   ]
 }
 ```
-### ALL, ANY
 
-An example of the resulting JSON is:
+The first matching branch wins. If none matches a `RuntimeError` is raised.
 
-```python
-rules = [
-{ 
-  "conditions": {
-     "all": [
-      { "name": "vonchusohuu",
-        "operator": "greater_than_or_equal_to",
-        "value": 5000000000,
-      },
-      { "function": "percentage",
-        "params": ["doanhthu", 200],
-        "operator": "less_than_or_equal_to",
-        "value_condition": [
-          #First condition
-            { "conditions": { "all": [
-                { "name": "customer_segment",
-                  "operator": "equal_to",
-                  "value": "SME",
-                }
-            ]},
-              "actions": [
-                  { "name": "set_value_numeric",
-                    "params": 0
-                  }]},
+### Tracing output
 
-          #Second condition
-            { "conditions": { "any": [
-                { "name": "customer_segment",
-                  "operator": "equal_to",
-                  "value": "MMLC",
-                },
-                { "name": "customer_segment",
-                  "operator": "equal_to",
-                  "value": "UE",
-                }
-            ]},
-              "actions": [
-                  { "name": "set_value_numeric",
-                    "params": 30
-                  }]},
+`check_conditions_recursively` and `run_all` return a trace that records each decision:
 
-          #Else condition
-            { "conditions": { "all": [
-                { "function": "always_true",
-                  "operator": "is_true"
-                }
-            ]},
-              "actions": [
-                  { "name": "set_value_numeric",
-                    "params": 50
-                  }]}           
-        ]
-      },
-      { "expression": "(vonchusohuu / doanhthu) * 100",
-        "operator": "less_than_or_equal_to",
-        "value": 50,
-      }
-      ]
-    },
-  
-  "actions": [],
+```json
+{
+  \"type\": \"all\",
+  \"result\": true,
+  \"children\": [
+    {
+      \"type\": \"condition\",
+      \"summary\": \"revenue > 100\",
+      \"result\": true,
+      \"input\": 125,
+      \"value\": 100
+    }
+  ]
 }
-]
 ```
 
-This translates directly to:
+The structure is suitable for powering UIs or audit logs.
 
-> **vonchusohuu** >= 5000000000
->
-> AND
->
-> **percentage**(doanhthu, 200) <= [ x ]
->>   if **customer_segment** == "SME" => 0
->> 
->>   elif **customer_segment** == "MMLC" or **customer_segment** == "UE" => 30
->> 
->>   else => 50
->
-> AND
->
-> (**vonchusohuu** / **doanhthu**) * 100 <= 50
+## Operators
 
-## Run your rules
+Operator wrappers expose comparison helpers while keeping values strongly typed. See `business_rules_genai/operators.py` for the full catalogue. Highlights:
 
-```python
-from business_rules import run_all
+- `StringType`: equality, containment, regex, membership checks.
+- `NumericType`: numeric comparisons, range checks, tolerance-aware equality.
+- `BooleanType`: `is_true` / `is_false`.
 
-companyDetails = CompanyDetails()
-rules = _some_function_to_extract_rule_set()
+## Testing
 
-run_all(rule_list=rules,
-        defined_variables=companyDetails,
-        defined_actions=CompanyActions(companyDetails),
-        stop_on_first_trigger=True
-        )
+Run the test suite with:
+
+```bash
+pytest
 ```
+
+## License
+
+MIT

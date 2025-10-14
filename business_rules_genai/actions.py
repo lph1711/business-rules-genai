@@ -1,55 +1,62 @@
-import inspect
+from __future__ import annotations
 
-from . import fields
-from .utils import fn_name_to_pretty_label
+from decimal import Decimal
+from typing import Any, Union
+
+from .operators import BooleanType, NumericType, StringType
+
+NumericInput = Union[int, float, Decimal, NumericType]
 
 
-class BaseActions(object):
-    """ Classes that hold a collection of actions to use with the rules
-    engine should inherit from this.
+class BaseActions:
+    """Default action implementations consumed by the rules engine.
+
+    Subclass this class to expose additional domain specific actions.
+    The helpers below focus on returning the engine's wrapper types so callers
+    can compose actions, expressions, and condition values interchangeably.
     """
-    @classmethod
-    def get_all_actions(cls):
-        methods = inspect.getmembers(cls)
-        return [{'name': m[0],
-                 'label': m[1].label,
-                 'params': m[1].params
-                } for m in methods if getattr(m[1], 'is_rule_action', False)]
 
-def _validate_action_parameters(func, params):
-    """ Verifies that the parameters specified are actual parameters for the
-    function `func`, and that the field types are FIELD_* types in fields.
-    """
-    if params is not None:
-        # Verify field name is valid
-        valid_fields = [getattr(fields, f) for f in dir(fields) \
-                if f.startswith("FIELD_")]
-        for param in params:
-            param_name, field_type = param['name'], param['fieldType']
-            if param_name not in func.__code__.co_varnames:
-                raise AssertionError("Unknown parameter name {0} specified for"\
-                        " action {1}".format(
-                        param_name, func.__name__))
+    @staticmethod
+    def _unwrap_numeric(value: NumericInput) -> Decimal:
+        """Convert raw numeric inputs into a ``Decimal``."""
+        if isinstance(value, NumericType):
+            return value.value
+        if isinstance(value, Decimal):
+            return value
+        return Decimal(str(value))
 
-            if field_type not in valid_fields:
-                raise AssertionError("Unknown field type {0} specified for"\
-                        " action {1} param {2}".format(
-                        field_type, func.__name__, param_name))
+    def set_value_numeric(self, value: NumericInput) -> NumericType:
+        """Return the provided value wrapped as ``NumericType``."""
+        return NumericType(value if not isinstance(value, NumericType) else value.value)
 
-def rule_action(label=None, params=None):
-    """ Decorator to make a function into a rule action
-    """
-    def wrapper(func):
-        params_ = params
-        if isinstance(params, dict):
-            params_ = [dict(label=fn_name_to_pretty_label(name),
-                           name=name,
-                           fieldType=field_type) \
-                      for name, field_type in params.items()]
-        # _validate_action_parameters(func, params_)
-        func.is_rule_action = True
-        func.label = label \
-                or fn_name_to_pretty_label(func.__name__)
-        func.params = params_
-        return func
-    return wrapper
+    def set_value_string(self, value: Union[str, StringType]) -> StringType:
+        """Return the provided value wrapped as ``StringType``."""
+        return value if isinstance(value, StringType) else StringType(str(value))
+
+    def set_value_none(self) -> None:
+        """Return ``None`` to explicitly clear a value."""
+        return None
+
+    def always_true(self) -> BooleanType:
+        """Utility action that always yields ``True``."""
+        return BooleanType(True)
+
+    def add(self, value1: NumericInput, value2: NumericInput) -> NumericType:
+        """Add two numeric values."""
+        return NumericType(self._unwrap_numeric(value1) + self._unwrap_numeric(value2))
+
+    def minus(self, value1: NumericInput, value2: NumericInput) -> NumericType:
+        """Subtract ``value2`` from ``value1``."""
+        return NumericType(self._unwrap_numeric(value1) - self._unwrap_numeric(value2))
+
+    def mult(self, value1: NumericInput, value2: NumericInput) -> NumericType:
+        """Multiply two numeric values."""
+        return NumericType(self._unwrap_numeric(value1) * self._unwrap_numeric(value2))
+
+    def divide(self, value1: NumericInput, value2: NumericInput) -> NumericType:
+        """Divide ``value1`` by ``value2``. Returns zero when dividing by zero."""
+        denominator = self._unwrap_numeric(value2)
+        if denominator == 0:
+            return NumericType(0)
+        numerator = self._unwrap_numeric(value1)
+        return NumericType(numerator / denominator)
