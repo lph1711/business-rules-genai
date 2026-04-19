@@ -22,6 +22,7 @@ Action = Dict[str, Any]
 TraceNode = Dict[str, Any]
 Rule = Dict[str, Any]
 RunResult = Tuple[bool, Union[List[TraceNode], Any]]
+MISSING = object()
 
 
 def run_all(
@@ -100,6 +101,8 @@ def check_condition(
         comparison_value = _resolve_value_condition(
             value_condition_list, defined_variables, defined_actions
         )
+    else:
+        comparison_value = _resolve_rule_value(comparison_value, defined_variables)
 
     label = condition.get("label")
 
@@ -122,8 +125,8 @@ def check_condition(
             defined_variables,
             defined_actions,
         )
-        params = condition.get("params") or []
-        params_str = ", ".join(map(str, params)) if isinstance(params, list) else str(params)
+        params = condition.get("params")
+        params_str = _format_action_params(params)
         label = label or f"{function_name}({params_str})"
     elif "name" in condition:
         variable = _get_variable_value(defined_variables, condition["name"])
@@ -198,10 +201,13 @@ def execute_math_expression(
         )
 
     if isinstance(ast_dict, str):
-        value = _get_variable_value(defined_variables, ast_dict)
-        if isinstance(value, BaseType):
-            return value if value.value is not None else None
-        return value
+        value = _lookup_variable_value(defined_variables, ast_dict)
+        if value is MISSING or value is None:
+            return None
+        wrapped_value = _wrap_value(value)
+        if isinstance(wrapped_value, BaseType):
+            return wrapped_value if wrapped_value.value is not None else None
+        return wrapped_value
 
     return ast_dict
 
@@ -225,29 +231,27 @@ def do_actions(
                 f"Action {method_name} is not defined in class {defined_actions.__class__.__name__}"
             )
 
-        raw_params = action.get("params")
-        if raw_params is None:
-            params_list: List[Any] = []
-        elif isinstance(raw_params, list):
-            params_list = raw_params
-        else:
-            params_list = [raw_params]
-
-        processed_params = [
-            _resolve_action_param(param, defined_variables) for param in params_list
-        ]
+        processed_args, processed_kwargs = _build_action_arguments(
+            action.get("params"),
+            defined_variables,
+        )
 
         try:
-            inspect.signature(method).bind(*processed_params)
+            inspect.signature(method).bind(*processed_args, **processed_kwargs)
         except TypeError as exc:
             raise AssertionError(
                 f"Action {method_name} parameter mismatch: {exc}"
             ) from exc
 
-        logger.debug("Executing action '%s' with params=%s", method_name, processed_params)
+        logger.debug(
+            "Executing action '%s' with args=%s kwargs=%s",
+            method_name,
+            processed_args,
+            processed_kwargs,
+        )
 
         try:
-            result = method(*processed_params)
+            result = method(*processed_args, **processed_kwargs)
         except Exception as exc:  # pragma: no cover - defensive
             raise RuntimeError(f"'{method_name}': {exc}") from exc
 
@@ -280,8 +284,7 @@ def _resolve_value_condition(
             )
         if matched:
             if "value" in branch:
-                val = branch["value"]
-                return val.value if isinstance(val, BaseType) else val
+                return _resolve_rule_value(branch["value"], defined_variables)
             actions = branch.get("actions") or []
             if actions:
                 return do_actions(actions, defined_variables, defined_actions)
@@ -383,14 +386,40 @@ def _evaluate_condition_block(
 
 def _resolve_action_param(param: Any, defined_variables: Any) -> Any:
     """Resolve action parameters, performing variable substitution when possible."""
+    if _is_variable_reference(param):
+        variable_name = param["var"]
+        value = _lookup_variable_value(defined_variables, variable_name)
+        if value is MISSING:
+            raise KeyError(f"Variable '{variable_name}' is not defined")
+        return _wrap_value(value)
+    if _is_literal_wrapper(param):
+        return param["literal"]
     if isinstance(param, str):
-        value = _get_variable_value(defined_variables, param)
-        return value if value is not None else param
+        value = _lookup_variable_value(defined_variables, param)
+        return _wrap_value(value) if value is not MISSING else param
     if isinstance(param, list):
         return [_resolve_action_param(item, defined_variables) for item in param]
     if isinstance(param, dict):
         return {key: _resolve_action_param(value, defined_variables) for key, value in param.items()}
     return param
+
+
+def _build_action_arguments(raw_params: Any, defined_variables: Any) -> Tuple[List[Any], Dict[str, Any]]:
+    if raw_params is None:
+        return [], {}
+    if isinstance(raw_params, list):
+        return ([_resolve_action_param(param, defined_variables) for param in raw_params], {})
+    if isinstance(raw_params, dict):
+        if _is_variable_reference(raw_params) or _is_literal_wrapper(raw_params):
+            return ([_resolve_action_param(raw_params, defined_variables)], {})
+        return (
+            [],
+            {
+                key: _resolve_action_param(value, defined_variables)
+                for key, value in raw_params.items()
+            },
+        )
+    return ([_resolve_action_param(raw_params, defined_variables)], {})
 
 
 def _normalize_actions(actions: Union[None, Action, Sequence[Action]]) -> List[Action]:
@@ -404,22 +433,25 @@ def _normalize_actions(actions: Union[None, Action, Sequence[Action]]) -> List[A
 
 def _get_variable_value(defined_variables: Any, name: str) -> BaseType | None:
     """Fetch and wrap a variable value from the provided context."""
-    value: Any = None
-    found = False
-
-    if isinstance(defined_variables, dict):
-        found = name in defined_variables
-        value = defined_variables.get(name)
-    else:
-        if hasattr(defined_variables, name):
-            value = getattr(defined_variables, name)
-            found = True
-            if callable(value):
-                value = value()
-
-    if not found:
+    value = _lookup_variable_value(defined_variables, name)
+    if value is MISSING:
         return None
+    wrapped_value = _wrap_value(value)
+    return wrapped_value if isinstance(wrapped_value, BaseType) else None
 
+
+def _lookup_variable_value(defined_variables: Any, name: str) -> Any:
+    if isinstance(defined_variables, dict):
+        return defined_variables[name] if name in defined_variables else MISSING
+
+    if not hasattr(defined_variables, name):
+        return MISSING
+
+    value = getattr(defined_variables, name)
+    return value() if callable(value) else value
+
+
+def _wrap_value(value: Any) -> Any:
     if isinstance(value, BaseType):
         return value
     if isinstance(value, bool):
@@ -428,8 +460,56 @@ def _get_variable_value(defined_variables: Any, name: str) -> BaseType | None:
         return NumericType(value)
     if isinstance(value, str):
         return StringType(value)
+    return value
 
-    return None
+
+def _is_variable_reference(value: Any) -> bool:
+    return isinstance(value, dict) and set(value.keys()) == {"var"}
+
+
+def _is_literal_wrapper(value: Any) -> bool:
+    return isinstance(value, dict) and set(value.keys()) == {"literal"}
+
+
+def _resolve_rule_value(value: Any, defined_variables: Any) -> Any:
+    if _is_variable_reference(value):
+        variable_name = value["var"]
+        resolved_value = _lookup_variable_value(defined_variables, variable_name)
+        if resolved_value is MISSING:
+            raise KeyError(f"Variable '{variable_name}' is not defined")
+        return resolved_value
+    if _is_literal_wrapper(value):
+        return value["literal"]
+    if isinstance(value, list):
+        return [_resolve_rule_value(item, defined_variables) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _resolve_rule_value(item, defined_variables)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _format_action_params(params: Any) -> str:
+    if params is None:
+        return ""
+    if isinstance(params, list):
+        return ", ".join(_format_action_param(param) for param in params)
+    if isinstance(params, dict):
+        if _is_variable_reference(params) or _is_literal_wrapper(params):
+            return _format_action_param(params)
+        return ", ".join(
+            f"{name}={_format_action_param(param)}" for name, param in params.items()
+        )
+    return _format_action_param(params)
+
+
+def _format_action_param(param: Any) -> str:
+    if _is_variable_reference(param):
+        return str(param["var"])
+    if _is_literal_wrapper(param):
+        return repr(param["literal"])
+    return str(param)
 
 
 def _do_operator_comparison(

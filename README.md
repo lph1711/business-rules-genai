@@ -67,15 +67,37 @@ If you need to show static information in the UI you can provide a labelled bloc
 {\"label\": \"Customer must pass KYC\", \"value\": true}
 ```
 
+For schema-driven UIs, declare variables on a `BaseVariables` subclass:
+
+```python
+from business_rules_genai import BaseVariables, numeric_rule_variable, string_rule_variable
+
+
+class CustomerVariables(BaseVariables):
+    def __init__(self, customer):
+        self.customer = customer
+
+    @string_rule_variable(label=\"Customer Segment\", options=[\"SME\", \"ENT\"])
+    def segment(self):
+        return self.customer[\"segment\"]
+
+    @numeric_rule_variable(description=\"Annual revenue in USD\")
+    def revenue(self):
+        return self.customer[\"revenue\"]
+```
+
 ### Functions and expressions
 
 - `function`: call an action before applying an operator.
 - `expression`: describe simple math (`+`, `-`, `*`, `/`). Expressions are transpiled into nested action calls so you can reuse the same arithmetic implementations as rule actions.
+- `params`: may be a positional list or a named object. Named params are easier to generate from a frontend.
+- `{\"var\": \"name\"}`: explicitly reference a variable inside action params or comparison values.
+- `{\"literal\": ...}`: force a literal value when a frontend needs to send structured JSON.
 
 ```json
 {
   \"function\": \"percentage\",
-  \"params\": [\"revenue\", 200],
+  \"params\": {\"numerator\": {\"var\": \"revenue\"}, \"denominator\": 200},
   \"operator\": \"less_than_or_equal_to\",
   \"value\": 30
 }
@@ -133,6 +155,30 @@ The first matching branch wins. If none matches a `RuntimeError` is raised.
 ```
 
 The structure is suitable for powering UIs or audit logs.
+
+### Front-end schema
+
+Use `export_rule_schema` to expose variables, actions, operators, and supported reference shapes to a frontend builder:
+
+```python
+from business_rules_genai import BaseActions, export_rule_schema, rule_action
+
+
+class CustomerActions(BaseActions):
+    @rule_action(params={\"value\": \"string\"}, return_type=\"string\")
+    def tag(self, value):
+        return self.set_value_string(value)
+
+
+schema = export_rule_schema(CustomerVariables, CustomerActions())
+```
+
+The returned dictionary includes:
+
+- `variables`: labels, field types, options, and valid operators.
+- `actions`: parameter metadata inferred from decorators and type hints.
+- `operators`: catalogued per field type.
+- `references`: the explicit JSON shapes for variable and literal references.
 
 ## Operators
 

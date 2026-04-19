@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import inspect
 import re
 from decimal import Decimal
 from functools import wraps
 from typing import Any, Callable, Dict, Iterable
 
 from .fields import FIELD_LIST, FIELD_NO_INPUT, FIELD_NUMERIC, FIELD_TEXT
+from .utils import fn_name_to_pretty_label
 
 COMPARISON_OPERATOR_MAP: Dict[str, str] = {
     "equal_to": "==",
@@ -192,3 +194,63 @@ class BooleanType(BaseType):
     @type_operator(FIELD_NO_INPUT)
     def is_false(self) -> bool:
         return not bool(self.value)
+
+
+TYPE_CLASS_MAP: Dict[str, type[BaseType]] = {
+    StringType.name: StringType,
+    NumericType.name: NumericType,
+    BooleanType.name: BooleanType,
+}
+
+
+def _coerce_type_class(field_type: str | type[BaseType]) -> type[BaseType]:
+    if isinstance(field_type, str):
+        if field_type not in TYPE_CLASS_MAP:
+            raise KeyError(f"Unknown field type: {field_type}")
+        return TYPE_CLASS_MAP[field_type]
+    return field_type
+
+
+def get_type_operators(field_type: str | type[BaseType]) -> list[Dict[str, Any]]:
+    """Return operator metadata for a field type."""
+    type_class = _coerce_type_class(field_type)
+    operators: list[Dict[str, Any]] = []
+
+    for name, member in inspect.getmembers(type_class, predicate=callable):
+        if not getattr(member, "is_operator", False):
+            continue
+
+        operator_label = getattr(member, "label", None) or fn_name_to_pretty_label(name)
+        input_type = getattr(member, "input_type", None)
+        operators.append(
+            {
+                "name": name,
+                "label": operator_label,
+                "field_type": type_class.name,
+                "input_type": input_type,
+                "comparison_type": getattr(member, "comparison_type", None),
+                "requires_value": input_type != FIELD_NO_INPUT,
+                "display": COMPARISON_OPERATOR_MAP.get(name, operator_label),
+            }
+        )
+
+    return operators
+
+
+def export_operator_catalog() -> Dict[str, list[Dict[str, Any]]]:
+    """Return all operators grouped by field type."""
+    return {
+        field_type: get_type_operators(type_class)
+        for field_type, type_class in TYPE_CLASS_MAP.items()
+    }
+
+
+__all__ = [
+    "BaseType",
+    "BooleanType",
+    "COMPARISON_OPERATOR_MAP",
+    "NumericType",
+    "StringType",
+    "export_operator_catalog",
+    "get_type_operators",
+]

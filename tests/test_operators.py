@@ -1,6 +1,11 @@
 from decimal import Decimal
 
-from business_rules_genai.operators import BooleanType, NumericType, StringType
+from business_rules_genai.operators import (
+    BooleanType,
+    NumericType,
+    StringType,
+    export_operator_catalog,
+)
 
 
 def test_string_type_operators():
@@ -35,3 +40,11 @@ def test_boolean_type():
     assert not true_value.is_false()
     assert false_value.is_false()
     assert not false_value.is_true()
+
+
+def test_operator_catalog_groups_operators_by_field_type():
+    catalog = export_operator_catalog()
+
+    assert "numeric" in catalog
+    assert any(operator["name"] == "greater_than" for operator in catalog["numeric"])
+    assert any(operator["name"] == "is_true" for operator in catalog["boolean"])

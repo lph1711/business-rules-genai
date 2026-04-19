@@ -1,11 +1,13 @@
 from decimal import Decimal
 
-from business_rules_genai.actions import BaseActions
+from business_rules_genai.actions import BaseActions, export_rule_actions, rule_action
 from business_rules_genai.operators import BooleanType, NumericType, StringType
 
 
 class DemoActions(BaseActions):
-    pass
+    @rule_action(params={"value": "numeric"}, return_type="numeric")
+    def double(self, value):
+        return self.mult(value, 2)
 
 
 def test_numeric_helpers_wrap_values():
@@ -34,5 +36,21 @@ def test_arithmetic_operations_handle_raw_and_wrapped_inputs():
     assert actions.add(five, three).value == Decimal("8")
     assert actions.minus(10, five).value == Decimal("5")
     assert actions.mult(five, 2).value == Decimal("10")
-    assert actions.divide(Decimal("10"), three).value == Decimal("3.333333333333333333333333333")
+    assert (
+        actions.divide(Decimal("10"), three).value
+        == Decimal("3.333333333333333333333333333")
+    )
     assert actions.divide(three, 0).value == Decimal("0")
+
+
+def test_action_schema_includes_builtin_and_custom_metadata():
+    actions = export_rule_actions(DemoActions)
+    action_map = {action["name"]: action for action in actions}
+
+    assert action_map["set_value_numeric"]["return_type"] == "numeric"
+    assert action_map["set_value_numeric"]["params"] == [
+        {"name": "value", "required": True, "field_type": "numeric"}
+    ]
+    assert action_map["double"]["params"] == [
+        {"name": "value", "required": True, "field_type": "numeric"}
+    ]
